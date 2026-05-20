@@ -62,6 +62,8 @@ MODE=json ./scripts/ainfera-e2e.sh   # agent-parseable
 
 Spec: [`scripts/AINFERA-E2E.md`](scripts/AINFERA-E2E.md)
 
+Outcome capture (methodology §16): [`docs/outcome-capture.md`](docs/outcome-capture.md)
+
 ## Repo map (ainfera-ai org)
 
 | Repo | Role |
