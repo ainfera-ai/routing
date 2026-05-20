@@ -25,7 +25,22 @@ Ainfera makes AI agents economically and operationally viable in production by o
 
 1. **MCP** (`mcp.ainfera.ai`) — reference: `cloudflare/smoke-mcp.sh`
 2. **Fleet dogfood** — OpenClaw, Hermes (founder), [Letta](https://github.com/ainfera-ai/ainfera-letta) (Namo), LangGraph
-3. **GTM-only** — LlamaIndex, CrewAI, ADK — publish after MCP pattern proven
+3. **GTM-only** — [LlamaIndex](https://github.com/ainfera-ai/ainfera-llamaindex), CrewAI, ADK — publish after MCP pattern proven
+
+## Adapter repos (founder-locked 8 — all live)
+
+| Repo | Status |
+| --- | --- |
+| [ainfera-mcp](https://github.com/ainfera-ai/ainfera-mcp) | Live + `smoke-mcp.sh` |
+| [ainfera-openclaw](https://github.com/ainfera-ai/ainfera-openclaw) | Live + `curl-example.sh` |
+| [ainfera-hermes](https://github.com/ainfera-ai/ainfera-hermes) | Live + `curl-example.sh` |
+| [ainfera-letta](https://github.com/ainfera-ai/ainfera-letta) | Live + `curl-example.sh` |
+| [ainfera-langgraph](https://github.com/ainfera-ai/ainfera-langgraph) | Live + `curl-example.sh` |
+| [ainfera-llamaindex](https://github.com/ainfera-ai/ainfera-llamaindex) | Live + `curl-example.sh` |
+| [ainfera-crewai](https://github.com/ainfera-ai/ainfera-crewai) | Live + `curl-example.sh` |
+| [ainfera-google-adk](https://github.com/ainfera-ai/ainfera-google-adk) | Live + `curl-example.sh` |
+
+Also published: [ainfera-langchain](https://github.com/ainfera-ai/ainfera-langchain), [ainfera-openai-compatible](https://github.com/ainfera-ai/ainfera-openai-compatible).
 
 Each adapter ships with `curl-example.sh`: signup → inference → audit verify.
 
