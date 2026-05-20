@@ -9,7 +9,7 @@ Every inference through `POST /v1/inference` or `/v1/chat/completions` writes ha
 | Event | Payload hints |
 | --- | --- |
 | `inference.routed` | Model slug, router (`ainfera-auto` when applicable) |
-| `inference.completed` | Tokens, cost, provider |
+| `provider.responded` / `receipt.created` | Tokens, cost, provider |
 | `inference.rejected_*` | Cap / funds refusal with policy context |
 
 These events are the **v0 outcome pipe** — verifiable offline via `ainfera-verify` and `GET /v1/audit/{agent_id}/verify`.
