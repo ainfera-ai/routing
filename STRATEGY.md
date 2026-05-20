@@ -24,7 +24,7 @@ Ainfera makes AI agents economically and operationally viable in production by o
 ## Adapter execution order
 
 1. **MCP** (`mcp.ainfera.ai`) — reference: `cloudflare/smoke-mcp.sh`
-2. **Fleet dogfood** — OpenClaw, Hermes (founder), Letta (when repo exists), LangGraph
+2. **Fleet dogfood** — OpenClaw, Hermes (founder), [Letta](https://github.com/ainfera-ai/ainfera-letta) (Namo), LangGraph
 3. **GTM-only** — LlamaIndex, CrewAI, ADK — publish after MCP pattern proven
 
 Each adapter ships with `curl-example.sh`: signup → inference → audit verify.
