@@ -1,0 +1,12 @@
+# Ainfera Routing — latency-first tenant policy (starter template)
+# Apply via PUT /v1/routing-policy or dashboard /settings/routing-policy
+policy_name: latency_first
+cost_weight: 0.20
+quality_weight: 0.35
+latency_weight: 0.45
+fallback_enabled: true
+fallback_cost_penalty_pct: 5.0
+compliance_veto_threshold: 0.50
+notes: >
+  Prefer lowest p95 latency within the quality floor. Use X-Ainfera-Priority: latency
+  on individual requests for per-call overrides.

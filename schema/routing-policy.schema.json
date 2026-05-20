@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ainfera.ai/schemas/routing-policy/v1",
+  "title": "TenantRoutingPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policy_name",
+    "cost_weight",
+    "quality_weight",
+    "latency_weight",
+    "fallback_enabled"
+  ],
+  "properties": {
+    "policy_name": {
+      "type": "string",
+      "enum": [
+        "balanced",
+        "latency_first",
+        "cost_first",
+        "quality_first",
+        "compliance_first",
+        "strict_no_fallback"
+      ]
+    },
+    "cost_weight": { "type": "number", "minimum": 0, "maximum": 1 },
+    "quality_weight": { "type": "number", "minimum": 0, "maximum": 1 },
+    "latency_weight": { "type": "number", "minimum": 0, "maximum": 1 },
+    "fallback_enabled": { "type": "boolean" },
+    "fallback_cost_penalty_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 5
+    },
+    "compliance_veto_threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.5
+    },
+    "notes": { "type": "string" }
+  }
+}

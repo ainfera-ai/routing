@@ -1,0 +1,11 @@
+# Ainfera Routing — compliance-first tenant policy (starter template)
+policy_name: compliance_first
+cost_weight: 0.25
+quality_weight: 0.45
+latency_weight: 0.30
+fallback_enabled: false
+fallback_cost_penalty_pct: 5.0
+compliance_veto_threshold: 0.80
+notes: >
+  Strict routing: no fallback chains. Providers below compliance threshold are vetoed
+  before scoring. Returns 402/503 instead of silent downgrade when no eligible model.
