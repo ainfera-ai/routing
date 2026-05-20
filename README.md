@@ -49,6 +49,19 @@ curl -sS https://api.ainfera.ai/v1/inference \
 
 Use `model: "ainfera-auto"` for ATS-weighted routing across the live catalog. See [docs](https://ainfera.ai/docs) for Agent Cards, workflows, and audit verification.
 
+## Production E2E smoke
+
+Full L1–L5 verification against live `api.ainfera.ai` (~3 min):
+
+```bash
+git clone https://github.com/ainfera-ai/routing
+cd routing
+./scripts/ainfera-e2e.sh          # human-readable
+MODE=json ./scripts/ainfera-e2e.sh   # agent-parseable
+```
+
+Spec: [`scripts/AINFERA-E2E.md`](scripts/AINFERA-E2E.md)
+
 ## Repo map (ainfera-ai org)
 
 | Repo | Role |
@@ -58,7 +71,7 @@ Use `model: "ainfera-auto"` for ATS-weighted routing across the live catalog. Se
 | [sdk](https://github.com/ainfera-ai/sdk) | Python client |
 | [specs](https://github.com/ainfera-ai/specs) | ATS, AAMC, API contracts (CC-BY 4.0) |
 | [ainfera-mcp](https://github.com/ainfera-ai/ainfera-mcp) | MCP reference adapter |
-| Framework adapters | `ainfera-mcp`, `ainfera-hermes`, `ainfera-openclaw`, `ainfera-letta`, `ainfera-langchain`, `ainfera-crewai`, `ainfera-google-adk` |
+| Framework adapters | `ainfera-mcp`, `ainfera-hermes`, `ainfera-openclaw`, `ainfera-letta`, `ainfera-langgraph`, `ainfera-langchain`, `ainfera-llamaindex`, `ainfera-crewai`, `ainfera-google-adk` |
 
 ## License
 
