@@ -26,7 +26,7 @@ for repo in ainfera-hermes ainfera-openclaw ainfera-langchain ainfera-crewai \
   ainfera-openai-compatible; do
   script="$MONO/$repo/curl-example.sh"
   if [[ -x "$script" ]]; then
-    run "adapter:$repo" "$ROOT/$repo" "./curl-example.sh"
+    run "adapter:$repo" "$MONO/$repo" "./curl-example.sh"
   fi
 done
 

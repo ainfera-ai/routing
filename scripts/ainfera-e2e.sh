@@ -113,6 +113,16 @@ else
   phase_fail "1.2 agent-card.json" "mcp_url=$ac_mcp caps=$ac_caps — expected mcp_url present + 5 layers"
 fi
 
+verbose "curl ${WEB}/.well-known/ainfera-public-key.json"
+pk="$(curl -sS --max-time 10 "${WEB}/.well-known/ainfera-public-key.json")"
+pk_alg="$(echo "$pk" | jq -r '.alg // ""')"
+pk_b64="$(echo "$pk" | jq -r '.hmac_key_b64 // ""')"
+if [[ "$pk_alg" == "HMAC-SHA256" && -n "$pk_b64" ]]; then
+  phase_pass "1.2b ainfera-public-key.json" "alg=$pk_alg · key material present"
+else
+  phase_fail "1.2b ainfera-public-key.json" "alg=$pk_alg hmac_key_b64 len=${#pk_b64}"
+fi
+
 verbose "curl ${WEB}/llms.txt"
 llms="$(curl -sS --max-time 10 "${WEB}/llms.txt")"
 llms_bytes="${#llms}"
