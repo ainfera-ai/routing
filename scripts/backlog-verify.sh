@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MONO="$(cd "$ROOT/.." && pwd)"
 FAIL=0
 
 run() {
@@ -16,14 +17,14 @@ run() {
   fi
 }
 
-run "E2E (routing)" "$ROOT/routing/scripts" "./ainfera-e2e.sh"
-run "MCP tools" "$ROOT/mcp-server/cloudflare" "./smoke-mcp.sh"
-run "MCP keyed inference" "$ROOT/mcp-server/cloudflare" "./smoke-mcp-keyed.sh"
+run "E2E (routing)" "$ROOT/scripts" "./ainfera-e2e.sh"
+run "MCP tools" "$MONO/mcp-server/cloudflare" "./smoke-mcp.sh"
+run "MCP keyed inference" "$MONO/mcp-server/cloudflare" "./smoke-mcp-keyed.sh"
 
 for repo in ainfera-hermes ainfera-openclaw ainfera-langchain ainfera-crewai \
   ainfera-google-adk ainfera-letta ainfera-langgraph ainfera-llamaindex \
   ainfera-openai-compatible; do
-  script="$ROOT/$repo/curl-example.sh"
+  script="$MONO/$repo/curl-example.sh"
   if [[ -x "$script" ]]; then
     run "adapter:$repo" "$ROOT/$repo" "./curl-example.sh"
   fi
