@@ -58,7 +58,7 @@ Use `model: "ainfera-auto"` for ATS-weighted routing across the live catalog. Se
 | [sdk](https://github.com/ainfera-ai/sdk) | Python client |
 | [specs](https://github.com/ainfera-ai/specs) | ATS, AAMC, API contracts (CC-BY 4.0) |
 | [ainfera-mcp](https://github.com/ainfera-ai/ainfera-mcp) | MCP reference adapter |
-| Framework adapters | `ainfera-hermes`, `ainfera-openclaw`, `ainfera-langchain`, … |
+| Framework adapters | `ainfera-mcp`, `ainfera-hermes`, `ainfera-openclaw`, `ainfera-letta`, `ainfera-langchain`, `ainfera-crewai`, `ainfera-google-adk` |
 
 ## License
 
