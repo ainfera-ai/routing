@@ -71,7 +71,7 @@ Outcome capture (methodology §16): [`docs/outcome-capture.md`](docs/outcome-cap
 | **routing** (this repo) | Public methodology, templates, onboarding |
 | [api](https://github.com/ainfera-ai/api) | L2 routing runtime + `/v1/inference` |
 | [sdk](https://github.com/ainfera-ai/sdk) | Python client |
-| [specs](https://github.com/ainfera-ai/specs) | ATS, AAMC, API contracts (CC-BY 4.0) |
+| [specs](https://github.com/ainfera-ai/specs) | Active: Ontology, A2A, Annex IV. Deprecated (AIN-243): ATS, AAMC. CC-BY 4.0. |
 | [ainfera-mcp](https://github.com/ainfera-ai/ainfera-mcp) | MCP reference adapter |
 | Framework adapters | `ainfera-mcp`, `ainfera-hermes`, `ainfera-openclaw`, `ainfera-letta`, `ainfera-langgraph`, `ainfera-langchain`, `ainfera-llamaindex`, `ainfera-crewai`, `ainfera-google-adk` |
 

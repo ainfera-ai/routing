@@ -7,4 +7,4 @@ fallback_enabled: true
 fallback_cost_penalty_pct: 5.0
 compliance_veto_threshold: 0.50
 notes: >
-  Minimize cost within ATS quality floor. Use X-Ainfera-Priority: cost on hot paths.
+  Minimize cost within `q_empirical` quality floor (the post-AIN-243 routing-outcomes signal that replaced the retired ATS methodology). Use X-Ainfera-Priority: cost on hot paths.
