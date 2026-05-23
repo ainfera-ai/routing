@@ -4,11 +4,11 @@ Routing intelligence compounds only when production traffic records **which cell
 
 ## What ships today (audit-backed)
 
-Every inference through `POST /v1/inference` or `/v1/chat/completions` writes hash-chained audit events, including:
+Every inference through `POST /v1/inference`, `/v1/chat/completions`, or `/v1/messages` writes hash-chained audit events, including:
 
 | Event | Payload hints |
 | --- | --- |
-| `inference.routed` | Model slug, router (`ainfera-auto` when applicable) |
+| `inference.routed` | Model slug, router (`ainfera-mithril` when applicable; `ainfera-auto` is its silent alias and is reported as `ainfera-mithril` in the audit chain) |
 | `provider.responded` / `receipt.created` | Tokens, cost, provider |
 | `inference.rejected_*` | Cap / funds refusal with policy context |
 
