@@ -41,13 +41,13 @@ curl -sS https://api.ainfera.ai/v1/inference \
   -H "Authorization: Bearer $AINFERA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "ainfera-mithril",
+    "model": "ainfera-inference",
     "messages": [{"role": "user", "content": "Route this agent call"}],
     "max_tokens": 256
   }'
 ```
 
-Use `model: "ainfera-mithril"` to let Ainfera route across the live catalog. (`ainfera-auto` is the legacy alias and still resolves identically.) See [docs](https://ainfera.ai/docs) for Agent Cards, workflows, and audit verification.
+Use `model: "ainfera-inference"` to let Ainfera route across the live catalog. The three legacy strings `ainfera-mithril`, `ainfera-auto`, and `ainfera/auto` remain silent aliases and resolve identically. See [docs](https://ainfera.ai/docs) for Agent Cards, workflows, and audit verification.
 
 ## Production E2E smoke
 
@@ -71,7 +71,7 @@ Outcome capture (methodology §16): [`docs/outcome-capture.md`](docs/outcome-cap
 | **routing** (this repo) | Public methodology, templates, onboarding |
 | [api](https://github.com/ainfera-ai/api) | L2 routing runtime + `/v1/inference` |
 | [sdk](https://github.com/ainfera-ai/sdk) | Python client |
-| [specs](https://github.com/ainfera-ai/specs) | ATS, AAMC, API contracts (CC-BY 4.0) |
+| [specs](https://github.com/ainfera-ai/specs) | Active: Ontology, A2A, Annex IV. Deprecated (AIN-243): ATS, AAMC. CC-BY 4.0. |
 | [ainfera-mcp](https://github.com/ainfera-ai/ainfera-mcp) | MCP reference adapter |
 | Framework adapters | `ainfera-mcp`, `ainfera-hermes`, `ainfera-openclaw`, `ainfera-letta`, `ainfera-langgraph`, `ainfera-langchain`, `ainfera-llamaindex`, `ainfera-crewai`, `ainfera-google-adk` |
 

@@ -8,7 +8,7 @@ Every inference through `POST /v1/inference`, `/v1/chat/completions`, or `/v1/me
 
 | Event | Payload hints |
 | --- | --- |
-| `inference.routed` | Model slug, router (`ainfera-mithril` when applicable; `ainfera-auto` is its silent alias and is reported as `ainfera-mithril` in the audit chain) |
+| `inference.routed` | Model slug, router (`ainfera-inference` when applicable; the three legacy strings `ainfera-mithril` / `ainfera-auto` / `ainfera/auto` are silent aliases and are reported as `ainfera-inference` in the audit chain) |
 | `provider.responded` / `receipt.created` | Tokens, cost, provider |
 | `inference.rejected_*` | Cap / funds refusal with policy context |
 
