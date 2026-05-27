@@ -219,8 +219,7 @@ def decide(
         # only failures get a separate rule_fired so the audit shows the
         # cause precisely.
         any_enrolled_made_it_to_floor = any(
-            o.drop_reason
-            in (DropReason.BELOW_QUALITY_FLOOR, DropReason.EXCEEDS_BUDGET_CAP)
+            o.drop_reason in (DropReason.BELOW_QUALITY_FLOOR, DropReason.EXCEEDS_BUDGET_CAP)
             for o in outcomes
         )
         return Decision(
@@ -255,9 +254,7 @@ def decide(
     # excluded" assertion is auditable from the Decision alone, without
     # re-running the rule. A veto is influential iff at least one vetoed
     # candidate would have placed cheaper than the actual winner.
-    veto_outcomes = [
-        o for o in outcomes if o.drop_reason is DropReason.M_ALLOWED_VETO
-    ]
+    veto_outcomes = [o for o in outcomes if o.drop_reason is DropReason.M_ALLOWED_VETO]
     winner = ranked[0]
     winner_total = winner.total_price_per_mtok()
     veto_changed_winner = any(

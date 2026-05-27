@@ -1,13 +1,22 @@
 """Ainfera Routing — the brain (importable decision core).
 
 Public API:
-    decide(request, candidates, policy) -> Decision
+    decide(request, candidates, policy) -> Decision         # v0 (q_prior only)
+    LinUCBConsumer / Observation / replay                   # AIN-246 mechanics
 
-The decision is pure, deterministic, and N-agnostic. v0 uses q_prior only;
-q_empirical lands in v1 (AIN-246). See methodology v1.2 §D for the rule.
+AIN-246: the consumer reads labeled `routing_outcomes.reward` and
+maintains per-(cell, model) statistics. The brain in `decide.py` is
+NOT modified — wiring `q_empirical` into the decision rule is a future
+PR gated on founder authorization (Disc #12).
 """
 
 from ainfera_routing.decide import decide
+from ainfera_routing.learning import (
+    CellModelStats,
+    LinUCBConsumer,
+    Observation,
+    replay,
+)
 from ainfera_routing.types import (
     Candidate,
     Decision,
@@ -18,11 +27,15 @@ from ainfera_routing.types import (
 
 __all__ = [
     "Candidate",
+    "CellModelStats",
     "Decision",
     "DropReason",
+    "LinUCBConsumer",
+    "Observation",
     "Policy",
     "RoutingRequest",
     "decide",
+    "replay",
 ]
 
 # Bumped any time the decision rule, gating, or tiebreak changes.

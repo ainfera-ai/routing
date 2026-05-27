@@ -172,9 +172,7 @@ def test_nt2_m_allowed_veto_excludes_otherwise_winning_candidate() -> None:
     gemini-3-1-pro (next cheapest at $11.25/Mt combined, q=0.90) wins.
     """
     cands = _anchors()
-    cands = [
-        replace(c, m_allowed=False) if c.brand_slug == "mistral" else c for c in cands
-    ]
+    cands = [replace(c, m_allowed=False) if c.brand_slug == "mistral" else c for c in cands]
     d = decide(
         _request(),
         cands,
@@ -190,9 +188,7 @@ def test_nt2_m_allowed_veto_excludes_otherwise_winning_candidate() -> None:
 def test_nt2_veto_on_non_winning_candidate_does_not_change_rule_fired() -> None:
     """Vetoing a non-cheapest candidate must not flip rule_fired to veto_applied."""
     cands = _anchors()
-    cands = [
-        replace(c, m_allowed=False) if c.brand_slug == "anthropic" else c for c in cands
-    ]
+    cands = [replace(c, m_allowed=False) if c.brand_slug == "anthropic" else c for c in cands]
     d = decide(
         _request(),
         cands,
@@ -230,9 +226,7 @@ def test_nt3_q_prior_none_is_dropped_not_chosen() -> None:
     )
     assert d.chosen is not None
     assert d.chosen.model_slug != "claude-sonnet-4-6"
-    not_enrolled = [
-        c for c in d.candidates if c.drop_reason is DropReason.NOT_ENROLLED_NO_Q_PRIOR
-    ]
+    not_enrolled = [c for c in d.candidates if c.drop_reason is DropReason.NOT_ENROLLED_NO_Q_PRIOR]
     assert {c.model_slug for c in not_enrolled} == {"claude-sonnet-4-6"}
 
 
@@ -285,9 +279,7 @@ def test_budget_cap_drops_too_expensive_survivors() -> None:
     )
     assert d.chosen is not None
     assert d.chosen.model_slug == "mistral-large-3"
-    over_budget = [
-        c for c in d.candidates if c.drop_reason is DropReason.EXCEEDS_BUDGET_CAP
-    ]
+    over_budget = [c for c in d.candidates if c.drop_reason is DropReason.EXCEEDS_BUDGET_CAP]
     assert "claude-opus-4-7" in {c.model_slug for c in over_budget}
 
 
