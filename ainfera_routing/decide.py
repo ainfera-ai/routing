@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from decimal import Decimal
 
 from ainfera_routing.types import (
@@ -84,6 +85,30 @@ def project_cost_usd(
     ).quantize(Decimal("0.000001"))
 
 
+# ── quality source (AIN-246 · q_prior ⊕ q_empirical) ─────────────────────
+
+
+def _effective_q(
+    candidate: Candidate,
+    q_empirical: Mapping[str, Decimal] | None,
+) -> Decimal | None:
+    """Quality used for the floor + q-tiebreak: the learned per-model mean
+    (``q_empirical``) when present, else the static ``q_prior``.
+
+    Per ontology v1.3 (``Q = q_prior ⊕ q_empirical``): once labeled outcomes
+    accrue, the empirical mean overrides the prior for SCORING. Enrolment is
+    unchanged — it still requires a real ``q_prior`` (F5: never fabricate a
+    prior), so the override only ever adjusts an already-enrolled candidate.
+    ``q_empirical=None`` (steady-state caller) returns ``q_prior`` unchanged,
+    so ``decide()`` stays byte-for-byte identical to v0.
+    """
+    if q_empirical is not None:
+        override = q_empirical.get(candidate.model_slug)
+        if override is not None:
+            return override
+    return candidate.q_prior
+
+
 # ── the decision ─────────────────────────────────────────────────────────
 
 
@@ -91,8 +116,19 @@ def decide(
     request: RoutingRequest,
     candidates: tuple[Candidate, ...] | list[Candidate],
     policy: Policy,
+    *,
+    q_empirical: Mapping[str, Decimal] | None = None,
 ) -> Decision:
-    """Quality-floor-then-min-cost over an N-candidate set."""
+    """Quality-floor-then-min-cost over an N-candidate set.
+
+    ``q_empirical`` (AIN-246): optional ``model_slug -> learned mean`` map. When
+    a candidate has an entry, that value replaces ``q_prior`` in the quality
+    floor and the q-tiebreak (the enrolment gates and the cheapest-survivor
+    pick are unchanged — Disc #12). Omitted/``None`` → identical to v0. The
+    map is passed in by the caller (RNG-free, DB-free) so ``decide`` stays a
+    pure, deterministic function; exploration (the ≥5% floor) is applied by
+    the caller, not here.
+    """
 
     h = ruleset_hash()
 
@@ -176,8 +212,10 @@ def decide(
             )
             continue
 
-        # 2. Quality floor
-        if c.q_prior < policy.min_quality:
+        # 2. Quality floor (AIN-246: empirical override when present, else prior).
+        # eq is non-None here — enrolment above guarantees c.q_prior is present.
+        eq = _effective_q(c, q_empirical)
+        if eq is not None and eq < policy.min_quality:
             outcomes.append(
                 CandidateOutcome(
                     model_id=c.model_id,
@@ -244,7 +282,7 @@ def decide(
         survivors,
         key=lambda c: (
             c.total_price_per_mtok(),
-            -(c.q_prior or Decimal("0")),
+            -(_effective_q(c, q_empirical) or Decimal("0")),
             c.model_slug,
         ),
     )
