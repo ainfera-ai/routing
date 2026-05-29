@@ -172,9 +172,7 @@ def test_nt2_m_allowed_veto_excludes_otherwise_winning_candidate() -> None:
     gemini-3-1-pro (next cheapest at $11.25/Mt combined, q=0.90) wins.
     """
     cands = _anchors()
-    cands = [
-        replace(c, m_allowed=False) if c.brand_slug == "mistral" else c for c in cands
-    ]
+    cands = [replace(c, m_allowed=False) if c.brand_slug == "mistral" else c for c in cands]
     d = decide(
         _request(),
         cands,
@@ -190,9 +188,7 @@ def test_nt2_m_allowed_veto_excludes_otherwise_winning_candidate() -> None:
 def test_nt2_veto_on_non_winning_candidate_does_not_change_rule_fired() -> None:
     """Vetoing a non-cheapest candidate must not flip rule_fired to veto_applied."""
     cands = _anchors()
-    cands = [
-        replace(c, m_allowed=False) if c.brand_slug == "anthropic" else c for c in cands
-    ]
+    cands = [replace(c, m_allowed=False) if c.brand_slug == "anthropic" else c for c in cands]
     d = decide(
         _request(),
         cands,
@@ -230,9 +226,7 @@ def test_nt3_q_prior_none_is_dropped_not_chosen() -> None:
     )
     assert d.chosen is not None
     assert d.chosen.model_slug != "claude-sonnet-4-6"
-    not_enrolled = [
-        c for c in d.candidates if c.drop_reason is DropReason.NOT_ENROLLED_NO_Q_PRIOR
-    ]
+    not_enrolled = [c for c in d.candidates if c.drop_reason is DropReason.NOT_ENROLLED_NO_Q_PRIOR]
     assert {c.model_slug for c in not_enrolled} == {"claude-sonnet-4-6"}
 
 
@@ -285,9 +279,7 @@ def test_budget_cap_drops_too_expensive_survivors() -> None:
     )
     assert d.chosen is not None
     assert d.chosen.model_slug == "mistral-large-3"
-    over_budget = [
-        c for c in d.candidates if c.drop_reason is DropReason.EXCEEDS_BUDGET_CAP
-    ]
+    over_budget = [c for c in d.candidates if c.drop_reason is DropReason.EXCEEDS_BUDGET_CAP]
     assert "claude-opus-4-7" in {c.model_slug for c in over_budget}
 
 
@@ -359,3 +351,54 @@ def test_floor_sweep_picks_expected_winner(min_q: str, expected_winner: str) -> 
     )
     assert d.chosen is not None
     assert d.chosen.model_slug == expected_winner
+
+
+# ── AIN-246 · q_empirical override (q_prior ⊕ q_empirical) ───────────────
+
+
+def test_q_empirical_none_is_identical_to_v0() -> None:
+    """Omitting q_empirical == passing None == v0: byte-identical Decision."""
+    req, cands = _request(), _anchors()
+    pol = Policy(min_quality=Decimal("0.85"), policy_name="balanced")
+    base = decide(req, cands, pol)
+    with_none = decide(req, cands, pol, q_empirical=None)
+    with_empty = decide(req, cands, pol, q_empirical={})
+    assert base == with_none == with_empty
+
+
+def test_q_empirical_lifts_below_floor_model_and_wins() -> None:
+    """mistral q_prior=0.80 is below a 0.91 floor, but a learned mean of 0.95
+    clears it — and it is the cheapest survivor, so it now wins."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
+    # v0: mistral excluded, gpt-5-5 wins
+    assert decide(_request(), _anchors(), pol).chosen.model_slug == "gpt-5-5"
+    # with empirical override: mistral clears floor and is cheapest ($8/Mt) → wins
+    d = decide(
+        _request(), _anchors(), pol,
+        q_empirical={"mistral-large-3": Decimal("0.95")},
+    )
+    assert d.chosen is not None
+    assert d.chosen.model_slug == "mistral-large-3"
+    assert d.rule_fired == "cheapest_clearing_floor"
+
+
+def test_q_empirical_drops_high_prior_model_below_floor() -> None:
+    """opus q_prior=0.95 clears a 0.91 floor at v0, but a learned mean of 0.50
+    pushes it below — it is dropped with BELOW_QUALITY_FLOOR."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
+    d = decide(
+        _request(), _anchors(), pol,
+        q_empirical={"claude-opus-4-7": Decimal("0.50")},
+    )
+    opus = next(c for c in d.candidates if c.model_slug == "claude-opus-4-7")
+    assert opus.drop_reason is DropReason.BELOW_QUALITY_FLOOR
+    # winner is still the cheapest among the true survivors (gpt-5-5)
+    assert d.chosen is not None and d.chosen.model_slug == "gpt-5-5"
+
+
+def test_q_empirical_override_is_deterministic() -> None:
+    """Same inputs incl. q_empirical → byte-identical Decision across runs."""
+    req, cands = _request(), _anchors()
+    pol = Policy(min_quality=Decimal("0.88"), policy_name="balanced")
+    qe = {"grok-4": Decimal("0.99"), "mistral-large-3": Decimal("0.40")}
+    assert decide(req, cands, pol, q_empirical=qe) == decide(req, cands, pol, q_empirical=qe)
