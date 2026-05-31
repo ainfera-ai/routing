@@ -41,13 +41,13 @@ curl -sS https://api.ainfera.ai/v1/inference \
   -H "Authorization: Bearer $AINFERA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "ainfera-mithril",
+    "model": "ainfera-inference",
     "messages": [{"role": "user", "content": "Route this agent call"}],
     "max_tokens": 256
   }'
 ```
 
-Use `model: "ainfera-mithril"` to let Ainfera route across the live catalog. (`ainfera-auto` is the legacy alias and still resolves identically.) See [docs](https://ainfera.ai/docs) for Agent Cards, workflows, and audit verification.
+Use `model: "ainfera-inference"` to let Ainfera route across the live catalog. (`ainfera-mithril` / `ainfera-auto` are legacy aliases and still resolve identically.) See [docs](https://ainfera.ai/docs) for Agent Cards, workflows, and audit verification.
 
 ## Production E2E smoke
 
