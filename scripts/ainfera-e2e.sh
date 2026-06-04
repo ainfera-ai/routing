@@ -212,8 +212,8 @@ else
   SIGNUP_JWS="$(echo "$signup" | jq -r '.agent_card_jws // empty')"
   FREE_INFERENCES_AT_SIGNUP="$(echo "$signup" | jq -r '.free_tier_inferences_remaining // 0')"
 
-  # AIN-368 dual-accept: new `ainfera_*` + legacy `ai_infera_*`. Drop legacy in P3.
-  if [[ -n "$KEY" && ( "$KEY" == ainfera_* || "$KEY" == ai_infera_* ) ]]; then
+  # AIN-368 P3 legacy-off: only ainfera_* accepted.
+  if [[ -n "$KEY" && "$KEY" == ainfera_* ]]; then
     phase_pass "3.1 signup" "${OWNER_HANDLE}/${AGENT_HANDLE} · ainfera_* key · agent_id=${AGENT_ID:0:8}... · free=${FREE_INFERENCES_AT_SIGNUP}"
   elif [[ -n "$KEY" ]]; then
     phase_fail "3.1 signup" "key=${KEY:0:12}… does not start with ainfera_ (AIN-368)"
