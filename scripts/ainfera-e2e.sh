@@ -6,7 +6,7 @@
 # Usage:
 #   ./ainfera-e2e.sh                    # human mode, anonymous signup
 #   MODE=json ./ainfera-e2e.sh          # agent mode, JSON-only output
-#   AINFERA_API_KEY=ai_infera_... ./ainfera-e2e.sh   # skip signup
+#   AINFERA_API_KEY=ainfera_... ./ainfera-e2e.sh   # skip signup
 #   AINFERA_FAST=1 ./ainfera-e2e.sh     # skip multi-provider + Annex IV
 #   AINFERA_VERBOSE=1 ./ainfera-e2e.sh  # show all curl commands
 #
@@ -212,10 +212,11 @@ else
   SIGNUP_JWS="$(echo "$signup" | jq -r '.agent_card_jws // empty')"
   FREE_INFERENCES_AT_SIGNUP="$(echo "$signup" | jq -r '.free_tier_inferences_remaining // 0')"
 
-  if [[ -n "$KEY" && "$KEY" == ai_infera_* ]]; then
-    phase_pass "3.1 signup" "${OWNER_HANDLE}/${AGENT_HANDLE} · ai_infera_* key · agent_id=${AGENT_ID:0:8}... · free=${FREE_INFERENCES_AT_SIGNUP}"
+  # AIN-368 dual-accept: new `ainfera_*` + legacy `ai_infera_*`. Drop legacy in P3.
+  if [[ -n "$KEY" && ( "$KEY" == ainfera_* || "$KEY" == ai_infera_* ) ]]; then
+    phase_pass "3.1 signup" "${OWNER_HANDLE}/${AGENT_HANDLE} · ainfera_* key · agent_id=${AGENT_ID:0:8}... · free=${FREE_INFERENCES_AT_SIGNUP}"
   elif [[ -n "$KEY" ]]; then
-    phase_fail "3.1 signup" "key=$KEY does not start with ai_infera_ (memory lock 2026-05-16 PM)"
+    phase_fail "3.1 signup" "key=${KEY:0:12}… does not start with ainfera_ (AIN-368)"
   else
     phase_fail "3.1 signup" "no api_key in response: $(echo "$signup" | head -c 200)"
     # Critical: cannot proceed without key
