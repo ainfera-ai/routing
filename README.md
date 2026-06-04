@@ -35,7 +35,7 @@ Policy shape is documented in [`schema/routing-policy.schema.json`](schema/routi
 ## Minimal curl
 
 ```bash
-export AINFERA_API_KEY="ai_infera_..."
+export AINFERA_API_KEY="ainfera_..."
 
 curl -sS https://api.ainfera.ai/v1/inference \
   -H "Authorization: Bearer $AINFERA_API_KEY" \

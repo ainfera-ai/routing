@@ -57,7 +57,7 @@ Memory lock 2026-05-16 PM: **Done = curl-200 AND fresh-incognito browser-render-
 | 0 wallet topups | No real money | n/a |
 | 0 settlement transactions | No x402, no Stripe (memory lock #17: deferred 2 weeks) | n/a |
 
-**You can skip the signup phase by pre-setting `AINFERA_API_KEY=ai_infera_...` in your environment.** The script will reuse your existing agent and only emit audit events under your handle.
+**You can skip the signup phase by pre-setting `AINFERA_API_KEY=ainfera_...` in your environment.** The script will reuse your existing agent and only emit audit events under your handle.
 
 **`ainfera-e2e` is now a soft-reserved handle prefix** to make AIN-118 segregation easier when Week-1 lands. Test agents created by this script use that prefix.
 
@@ -90,7 +90,7 @@ When the script exits 0, you have empirically verified the following 12 claims a
 | 2 | API is reachable + descriptors served | `api.ainfera.ai/` returns service JSON + `/health` = ok |
 | 3 | Model catalog has ≥ 11 entries | `GET /v1/models` returns ≥ 11 |
 | 4 | Provider list has ≥ 10 active adapters | `GET /v1/providers` returns ≥ 10 with `active=true` |
-| 5 | Anonymous self-signup works (L1 identity) | `POST /v1/agents/signup` returns 200 + `ai_infera_*` key + agent_id |
+| 5 | Anonymous self-signup works (L1 identity) | `POST /v1/agents/signup` returns 200 + `ainfera_*` key + agent_id |
 | 6 | Issued AgentCard is JWS-signed (RFC 7515) | `GET /v1/agents/{id}/card` returns 3-segment JWS |
 | 7 | Wallet starts with 100 free inferences (L3 settlement) | `GET /v1/wallets/{id}` shows `free_remaining = 100` |
 | 8 | Inference works across ≥ 4 model families (L2 routing) | 4 different `provider` values in successful responses |
@@ -129,7 +129,7 @@ See that file for the full implementation; this doc describes the contract and e
   ✓ 2.4 /v1/providers — 10 active providers
 
 ━━━ 3. L1 Identity — anonymous self-signup ━━━
-  ✓ 3.1 signup — received ai_infera_* key + agent_id=a3f7c182...
+  ✓ 3.1 signup — received ainfera_* key + agent_id=a3f7c182...
 
 ━━━ 4. L1 Identity — JWS-signed AgentCard ━━━
   ✓ 4.1 agent-card.jws — 3-segment JWS (RFC 7515) for agent a3f7c182...
@@ -305,7 +305,7 @@ If you are an AI agent (Claude, GPT, Gemini, Grok, Mistral, or any other) execut
 
 This script reflects these locks:
 
-- **API key prefix `ai_infera_*`** (memory #16, locked 2026-05-16 PM)
+- **API key prefix `ainfera_*`** (memory #16, locked 2026-05-16 PM)
 - **Settlement deferred 2 weeks** (memory #17) — script doesn't test Stripe / x402 settlement; only the free-tier prepaid ledger
 - **No Stripe/x402 code paths exercised Sunday** — exactly per #17
 - **6 dogfood agents + AAMC voters** are separate from this script — this script creates its own anonymous test agent
@@ -330,7 +330,7 @@ chmod +x ainfera-e2e.sh
 ### With your existing key
 
 ```bash
-export AINFERA_API_KEY=ai_infera_your_key_here
+export AINFERA_API_KEY=ainfera_your_key_here
 ./ainfera-e2e.sh
 ```
 
