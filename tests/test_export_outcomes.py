@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.export_outcomes import bandit_cell, project_rows
+from scripts.export_outcomes import bandit_cell, fleet_downweight, project_rows
 
 
 def _row(**kw):
@@ -105,9 +105,11 @@ def test_invariant1_bypass_with_allow_mixed():
 def test_observation_shape_matches_refit_loader():
     obs = project_rows([_row()])
     o = obs[0]
-    assert set(o) == {"cell", "model_slug", "reward", "policy_version", "tick"}
+    assert set(o) == {"cell", "model_slug", "reward", "policy_version", "tick", "weight"}
     assert isinstance(o["reward"], float)
     assert o["tick"] == 0
+    # A plain external row (no fleet_agent) gets full weight.
+    assert o["weight"] == 1.0
 
 
 def test_ticks_are_deterministic_by_created_at():
@@ -119,3 +121,63 @@ def test_ticks_are_deterministic_by_created_at():
     obs = project_rows(rows)
     assert [o["model_slug"] for o in obs] == ["a", "c", "b"]
     assert [o["tick"] for o in obs] == [0, 1, 2]
+
+
+# ---- neutrality rider: down-weight internal-fleet, exclude only degraded ---
+# (AIN-388 P0-tail)
+
+def test_fleet_row_is_kept_but_downweighted():
+    """An internal-fleet row (fleet_agent set) is KEPT — not dropped — and
+    emitted at the down-weight, while an external row keeps full weight.
+    """
+    rows = [
+        _row(chosen_model_slug="m1", fleet_agent="tulkas"),   # internal fleet
+        _row(chosen_model_slug="m2", fleet_agent=None),        # external/customer
+    ]
+    obs = project_rows(rows)
+    assert len(obs) == 2, "fleet rows are kept (down-weighted), never dropped"
+    by_model = {o["model_slug"]: o["weight"] for o in obs}
+    assert by_model["m1"] == fleet_downweight()
+    assert by_model["m1"] < 1.0, "internal-fleet must be down-weighted"
+    assert by_model["m2"] == 1.0, "external row keeps full weight"
+
+
+def test_fleet_downweight_env_override(monkeypatch):
+    monkeypatch.setenv("AINFERA_FLEET_DOWNWEIGHT", "0.1")
+    obs = project_rows([_row(fleet_agent="aule")])
+    assert obs[0]["weight"] == 0.1
+
+
+def test_fleet_downweight_rejects_zero_and_garbage(monkeypatch):
+    # 0 / negative / non-numeric must NOT silently erase the seed signal —
+    # they fall back to the default (the degraded path is the way to exclude).
+    for bad in ("0", "-1", "abc", ""):
+        monkeypatch.setenv("AINFERA_FLEET_DOWNWEIGHT", bad)
+        assert fleet_downweight() == 0.25
+    monkeypatch.setenv("AINFERA_FLEET_DOWNWEIGHT", "2.0")
+    assert fleet_downweight() == 1.0  # clamped to (0, 1]
+
+
+def test_degraded_rows_are_excluded_not_weighted():
+    """Degraded/MLX rows are dropped entirely (a degraded backend's reward
+    is not a clean signal of the routed model). Several P2-forward shapes.
+    """
+    rows = [
+        _row(chosen_model_slug="clean"),
+        _row(chosen_model_slug="d1", degraded=True),
+        _row(chosen_model_slug="d2", traffic_origin="degraded"),
+        _row(chosen_model_slug="d3", source="prod", traffic_origin="mlx"),
+    ]
+    obs = project_rows(rows)
+    assert {o["model_slug"] for o in obs} == {"clean"}
+
+
+def test_fleet_and_degraded_combined():
+    # A degraded fleet row is excluded (degraded wins over down-weight).
+    rows = [
+        _row(chosen_model_slug="keep", fleet_agent="namo"),          # fleet → kept, down-weighted
+        _row(chosen_model_slug="drop", fleet_agent="namo", degraded=True),  # degraded → excluded
+    ]
+    obs = project_rows(rows)
+    assert {o["model_slug"] for o in obs} == {"keep"}
+    assert obs[0]["weight"] == fleet_downweight()
