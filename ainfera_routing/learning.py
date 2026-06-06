@@ -46,6 +46,19 @@ A `catalog_change` event resets the per-cell counts for the affected
 model, NOT the mean — so a re-listed model keeps its prior signal but
 re-enters the exploration window.
 
+## Provenance weight (AIN-388 P0-tail · neutrality rider)
+
+Each `Observation` carries a `weight` (default 1) that the ingest path
+multiplies into the decay weight. Internal-fleet dogfood rows are
+DOWN-WEIGHTED (weight < 1) — kept as seed signal, never trained on at full
+strength — while external/customer rows keep weight 1. The fleet/customer
+distinction and the down-weight constant live in the projector
+(`scripts/export_outcomes.py`, `AINFERA_FLEET_DOWNWEIGHT`), not here: this
+library stays policy-free and just honors the number. Degraded/MLX rows are
+EXCLUDED at projection time (never emitted as observations), not weighted —
+"down-weight internal-fleet, exclude only degraded." The default weight of 1
+keeps pre-AIN-388 replay state byte-identical.
+
 ## Deterministic replay
 
 `Decimal` arithmetic throughout (no float drift), sorted iteration in
@@ -97,6 +110,14 @@ class Observation:
     # Monotonic tick used by the decay rule. Caller assigns; the consumer
     # only requires that ticks be non-decreasing within a single stream.
     tick: int = 0
+    # Provenance weight (AIN-388 P0-tail · neutrality rider). The caller
+    # multiplies the decay weight by this to DOWN-WEIGHT internal-fleet
+    # dogfood rows — kept as seed signal, not dropped — so the fleet never
+    # trains on its own traffic at full strength. `1` = full weight (an
+    # external/customer row). The projector (export_outcomes.py) sets it;
+    # the consumer just honors it (no fleet policy lives in this library).
+    # Degraded/MLX rows are EXCLUDED upstream (never emitted), not weighted.
+    weight: Decimal = Decimal("1")
 
 
 @dataclass
@@ -186,7 +207,17 @@ class LinUCBConsumer:
                 raise ValueError(
                     f"reward out of [0, 1] for cell={o.cell!r} model={o.model_slug!r}: {o.reward}"
                 )
-            weight = self._decay_weight(effective_now - o.tick)
+            if o.weight < 0:
+                raise ValueError(
+                    f"weight must be >= 0 for cell={o.cell!r} model={o.model_slug!r}: {o.weight}"
+                )
+            # Total weight = time-decay * provenance weight. With the default
+            # provenance weight of 1 this is byte-identical to the pre-AIN-388
+            # behaviour, so existing replay/golden state is unchanged; a
+            # down-weighted fleet row contributes proportionally less to the
+            # mean while still counting as one observation (n) — kept, not
+            # dropped (the neutrality rider's "down-weight, don't exclude").
+            weight = self._decay_weight(effective_now - o.tick) * o.weight
             cell_state = self.state.setdefault(o.cell, {})
             stats = cell_state.setdefault(o.model_slug, CellModelStats())
             stats.update(o.reward, weight)

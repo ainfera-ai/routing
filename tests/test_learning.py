@@ -279,3 +279,62 @@ def test_a_b_scalars_track_weighted_observation_count_and_sum() -> None:
 def test_cell_model_stats_mean_returns_zero_on_empty() -> None:
     s = CellModelStats()
     assert s.mean() == Decimal("0")
+
+
+# ── provenance weight (AIN-388 P0-tail · down-weight, don't drop) ─────────
+
+
+def _wobs(cell: str, slug: str, reward: float, weight: str, tick: int = 0) -> Observation:
+    return Observation(
+        cell=cell,
+        model_slug=slug,
+        reward=Decimal(str(reward)),
+        policy_version="1.0.0",
+        tick=tick,
+        weight=Decimal(weight),
+    )
+
+
+def test_provenance_weight_downweights_mean_but_keeps_count() -> None:
+    """A down-weighted (fleet) observation is KEPT — it still counts as one
+    observation (n) — but contributes proportionally less to the mean.
+    """
+    c = LinUCBConsumer()
+    c.ingest([
+        _wobs("c1", "m1", 1.0, "1"),     # external, full weight
+        _wobs("c1", "m1", 0.0, "0.25"),  # internal-fleet, down-weighted
+    ])
+    stats = c.state["c1"]["m1"]
+    # mean = (1*1.0 + 0.25*0.0) / (1 + 0.25) = 0.8  (vs 0.5 at equal weight)
+    assert stats.mean() == Decimal("0.8")
+    assert Decimal("1.25") == stats.A   # weighted count
+    assert stats.n == 2                  # kept, NOT dropped
+
+
+def test_default_weight_is_one_and_matches_unweighted() -> None:
+    """An explicit weight=1 observation produces byte-identical state to a
+    default-weight observation — proves the field is backward-compatible.
+    """
+    a = LinUCBConsumer()
+    a.ingest([_obs("c1", "m1", 0.3), _obs("c1", "m1", 0.7)])
+    b = LinUCBConsumer()
+    b.ingest([_wobs("c1", "m1", 0.3, "1"), _wobs("c1", "m1", 0.7, "1")])
+    assert a.to_json() == b.to_json()
+
+
+def test_negative_weight_rejected() -> None:
+    c = LinUCBConsumer()
+    with pytest.raises(ValueError, match="weight must be >= 0"):
+        c.ingest([_wobs("c1", "m1", 0.5, "-0.1")])
+
+
+def test_zero_weight_is_inert_but_counts() -> None:
+    """weight=0 contributes no mass to the mean (the projector EXCLUDES
+    degraded rows upstream rather than passing 0) yet still increments n —
+    documents the boundary so a future change is a conscious one.
+    """
+    c = LinUCBConsumer()
+    c.ingest([_wobs("c1", "m1", 0.9, "0"), _wobs("c1", "m1", 0.4, "1")])
+    stats = c.state["c1"]["m1"]
+    assert stats.mean() == Decimal("0.4")  # the weight-0 reward adds nothing
+    assert stats.n == 2

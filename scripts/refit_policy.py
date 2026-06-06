@@ -25,7 +25,10 @@ separate, founder-gated step (and INVARIANT 1: a policy refit from
 
     show    → prints the ACTIVE version + its metadata.
 
-Observations JSON: a list of {cell, model_slug, reward, policy_version, tick}.
+Observations JSON: a list of {cell, model_slug, reward, policy_version, tick,
+weight}. `weight` (optional, default 1) is the AIN-388 neutrality-rider
+provenance weight — internal-fleet rows arrive down-weighted from the
+projector; older files without it replay byte-identically.
 """
 
 from __future__ import annotations
@@ -63,6 +66,10 @@ def _load_observations(path: Path) -> list[Observation]:
             reward=Decimal(str(o["reward"])),
             policy_version=o.get("policy_version", "v0"),
             tick=int(o.get("tick", 0)),
+            # AIN-388 neutrality-rider provenance weight; absent in pre-AIN-388
+            # observation files → defaults to full weight (1), preserving
+            # byte-identical replay of older exports.
+            weight=Decimal(str(o.get("weight", 1))),
         )
         for o in raw
     ]
