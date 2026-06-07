@@ -181,3 +181,68 @@ def test_fleet_and_degraded_combined():
     obs = project_rows(rows)
     assert {o["model_slug"] for o in obs} == {"keep"}
     assert obs[0]["weight"] == fleet_downweight()
+
+
+# ---- AIN-391 §2a: neutrality keyed off tenant_id, NOT the fleet_agent tag ---
+# The load-bearing gap fleet_agent-keying left: a fleet row whose per-agent
+# tag was never written (NULL fleet_agent) leaked into the moat at FULL weight.
+# Keying off tenant_id closes it. Keystone is identical to the api write path
+# (services/routing_brain._FLEET_TENANT_IDS_DEFAULT).
+
+_FLEET_TENANT = "280f4469-d318-4ec4-9c63-f3ea83466b03"
+_CUSTOMER_TENANT = "11111111-2222-3333-4444-555555555555"
+
+
+def test_fleet_keyed_off_tenant_id_proof_matrix():
+    """A/B/C/D: A(fleet, tagged) and B(fleet, fleet_agent NULL) must BOTH be
+    down-weighted to the SAME weight purely on tenant_id; C(customer) full;
+    D(degraded) excluded."""
+    obs = project_rows([
+        _row(chosen_model_slug="A", tenant_id=_FLEET_TENANT, fleet_agent="namo"),   # A fleet, tagged
+        _row(chosen_model_slug="B", tenant_id=_FLEET_TENANT, fleet_agent=None),      # B fleet, NULL tag (the gap)
+        _row(chosen_model_slug="C", tenant_id=_CUSTOMER_TENANT, fleet_agent=None),   # C customer
+        _row(chosen_model_slug="D", tenant_id=_FLEET_TENANT, traffic_origin="mlx"),  # D degraded
+    ])
+    w = {o["model_slug"]: o["weight"] for o in obs}
+    assert "D" not in w, "degraded fleet row excluded outright"
+    assert w["A"] == fleet_downweight()
+    assert w["B"] == w["A"], "untagged fleet row (NULL fleet_agent) down-weighted via tenant_id"
+    assert w["B"] < 1.0
+    assert w["C"] == 1.0, "customer tenant keeps full weight"
+
+
+def test_fleet_tenant_id_is_case_insensitive():
+    obs = project_rows([_row(tenant_id=_FLEET_TENANT.upper(), fleet_agent=None)])
+    assert obs[0]["weight"] == fleet_downweight()
+
+
+def test_fleet_tenant_env_is_additive_never_replaces(monkeypatch):
+    extra = "99999999-aaaa-bbbb-cccc-dddddddddddd"
+    monkeypatch.setenv("AINFERA_FLEET_TENANT_IDS", extra)
+    obs = project_rows([
+        _row(chosen_model_slug="extra", tenant_id=extra, fleet_agent=None),
+        _row(chosen_model_slug="default", tenant_id=_FLEET_TENANT, fleet_agent=None),
+    ])
+    w = {o["model_slug"]: o["weight"] for o in obs}
+    assert w["extra"] == fleet_downweight(), "env-added tenant treated as fleet"
+    assert w["default"] == fleet_downweight(), "default fleet tenant stays fleet (additive, not replace)"
+
+
+def test_fleet_agent_fallback_for_legacy_dumps_without_tenant_id():
+    """Back-compat: a dump row lacking tenant_id still down-weights via the
+    fleet_agent fallback (transitional until every dump carries tenant_id)."""
+    obs = project_rows([_row(fleet_agent="tulkas")])  # no tenant_id key at all
+    assert obs[0]["weight"] == fleet_downweight()
+
+
+def test_customer_row_without_tenant_or_agent_is_full_weight():
+    obs = project_rows([_row(tenant_id=_CUSTOMER_TENANT, fleet_agent=None)])
+    assert obs[0]["weight"] == 1.0
+
+
+def test_routing_fleet_tenant_keystone_matches_api_constant():
+    """Cross-repo lock: the projector's fleet tenant MUST equal the literal the
+    api write path tags on (api services/routing_brain._FLEET_TENANT_IDS_DEFAULT
+    + its own test). A drift in either repo would split fleet detection."""
+    from scripts.export_outcomes import _FLEET_TENANT_IDS_DEFAULT
+    assert _FLEET_TENANT_IDS_DEFAULT == "280f4469-d318-4ec4-9c63-f3ea83466b03"
