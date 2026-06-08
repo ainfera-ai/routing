@@ -1,0 +1,201 @@
+{
+  "overall": "FAIL_CLOSED",
+  "tally": {
+    "NO_CHANGE": 7,
+    "UNCERTIFIABLE_POSITIVITY": 4
+  },
+  "cells": [
+    {
+      "cell": "chat:cost",
+      "task": "chat",
+      "floor": "0.58",
+      "coverage_pick": "mistral-large-3",
+      "linucb_pick": "mistral-large-3",
+      "flipped": false,
+      "coverage_value": "0.7188",
+      "coverage_support": 24,
+      "linucb_value": "0.7188",
+      "linucb_support": 24,
+      "verdict": "NO_CHANGE",
+      "flags": [
+        "reliability:gemini-3-1-flash(5 failed)"
+      ],
+      "note": ""
+    },
+    {
+      "cell": "code:balanced",
+      "task": "code",
+      "floor": "0.78",
+      "coverage_pick": "gemini-3-1-pro",
+      "linucb_pick": "gpt-5-5",
+      "flipped": true,
+      "coverage_value": "0.0000",
+      "coverage_support": 2,
+      "linucb_value": "0.1875",
+      "linucb_support": 4,
+      "verdict": "UNCERTIFIABLE_POSITIVITY",
+      "flags": [
+        "judge_mono_zero:gemini-3-1-pro(n=12)"
+      ],
+      "note": "flip but no head-to-head overlap; baseline gemini-3-1-pro UNSUPPORTED(n=2), linucb gpt-5-5 UNSUPPORTED(n=4)"
+    },
+    {
+      "cell": "code:cost",
+      "task": "code",
+      "floor": "0.78",
+      "coverage_pick": "gemini-3-1-pro",
+      "linucb_pick": "gemini-3-1-pro",
+      "flipped": false,
+      "coverage_value": null,
+      "coverage_support": 0,
+      "linucb_value": null,
+      "linucb_support": 0,
+      "verdict": "NO_CHANGE",
+      "flags": [
+        "reliability:mistral-large-3(1 failed)"
+      ],
+      "note": ""
+    },
+    {
+      "cell": "embed:cost",
+      "task": "embed",
+      "floor": "0.52",
+      "coverage_pick": "mistral-large-3",
+      "linucb_pick": "mistral-large-3",
+      "flipped": false,
+      "coverage_value": "0.0000",
+      "coverage_support": 3,
+      "linucb_value": "0.0000",
+      "linucb_support": 3,
+      "verdict": "NO_CHANGE",
+      "flags": [
+        "reliability:gemini-3-1-flash-lite(4 failed)"
+      ],
+      "note": ""
+    },
+    {
+      "cell": "extraction:cost",
+      "task": "extraction",
+      "floor": "0.58",
+      "coverage_pick": "mistral-large-3",
+      "linucb_pick": "mistral-large-3",
+      "flipped": false,
+      "coverage_value": "0.9861",
+      "coverage_support": 18,
+      "linucb_value": "0.9861",
+      "linucb_support": 18,
+      "verdict": "NO_CHANGE",
+      "flags": [
+        "reliability:gemini-3-1-flash(7 failed)",
+        "reliability:mistral-large-3(3 failed)"
+      ],
+      "note": ""
+    },
+    {
+      "cell": "general:cost",
+      "task": "general",
+      "floor": "0.68",
+      "coverage_pick": "mistral-large-3",
+      "linucb_pick": "mistral-large-3",
+      "flipped": false,
+      "coverage_value": "0.7955",
+      "coverage_support": 22,
+      "linucb_value": "0.7955",
+      "linucb_support": 22,
+      "verdict": "NO_CHANGE",
+      "flags": [
+        "reliability:gemini-3-1-flash(4 failed)",
+        "reliability:mistral-large-3(10 failed)"
+      ],
+      "note": ""
+    },
+    {
+      "cell": "reasoning:balanced",
+      "task": "reasoning",
+      "floor": "0.88",
+      "coverage_pick": "gpt-5-5",
+      "linucb_pick": "gpt-5-5",
+      "flipped": false,
+      "coverage_value": null,
+      "coverage_support": 0,
+      "linucb_value": null,
+      "linucb_support": 0,
+      "verdict": "NO_CHANGE",
+      "flags": [],
+      "note": ""
+    },
+    {
+      "cell": "reasoning:cost",
+      "task": "reasoning",
+      "floor": "0.88",
+      "coverage_pick": "gpt-5-5",
+      "linucb_pick": "mistral-large-3",
+      "flipped": true,
+      "coverage_value": null,
+      "coverage_support": 0,
+      "linucb_value": "1.0000",
+      "linucb_support": 22,
+      "verdict": "UNCERTIFIABLE_POSITIVITY",
+      "flags": [
+        "reliability:mistral-large-3(1 failed)"
+      ],
+      "note": "flip but no head-to-head overlap; baseline gpt-5-5 UNSUPPORTED(n=0), linucb mistral-large-3=1.000(n=22)"
+    },
+    {
+      "cell": "reasoning:quality",
+      "task": "reasoning",
+      "floor": "0.88",
+      "coverage_pick": "gpt-5-5",
+      "linucb_pick": "claude-opus-4-7",
+      "flipped": true,
+      "coverage_value": "0.0000",
+      "coverage_support": 10,
+      "linucb_value": null,
+      "linucb_support": 0,
+      "verdict": "UNCERTIFIABLE_POSITIVITY",
+      "flags": [
+        "reliability:gpt-5-5(3 failed)",
+        "judge_mono_zero:gpt-5-5(n=25)"
+      ],
+      "note": "flip but no head-to-head overlap; baseline gpt-5-5=0.000(n=10), linucb claude-opus-4-7 UNSUPPORTED(n=0)"
+    },
+    {
+      "cell": "tool_use:balanced",
+      "task": "tool_use",
+      "floor": "0.78",
+      "coverage_pick": "gemini-3-1-pro",
+      "linucb_pick": "gpt-5-5",
+      "flipped": true,
+      "coverage_value": "0.1875",
+      "coverage_support": 4,
+      "linucb_value": null,
+      "linucb_support": 0,
+      "verdict": "UNCERTIFIABLE_POSITIVITY",
+      "flags": [
+        "reliability:claude-sonnet-4-7(1 failed)"
+      ],
+      "note": "flip but no head-to-head overlap; baseline gemini-3-1-pro UNSUPPORTED(n=4), linucb gpt-5-5 UNSUPPORTED(n=0)"
+    },
+    {
+      "cell": "tool_use:cost",
+      "task": "tool_use",
+      "floor": "0.78",
+      "coverage_pick": "gemini-3-1-pro",
+      "linucb_pick": "gemini-3-1-pro",
+      "flipped": false,
+      "coverage_value": null,
+      "coverage_support": 0,
+      "linucb_value": null,
+      "linucb_support": 0,
+      "verdict": "NO_CHANGE",
+      "flags": [
+        "reliability:mistral-large-3(11 failed)"
+      ],
+      "note": ""
+    }
+  ],
+  "meta": {
+    "generated_at": "2026-06-08",
+    "source": "routing_outcomes (prod, Supabase dftfpwzqxoebwzepygzl) \u00b7 labeled+reward \u00b7 degraded-excluded \u00b7 per-cell temporal split 0.7 \u00b7 catalog=enrolled-5 snapshot \u00b7 floors=api CELL_MIN_QUALITY (AIN-388)"
+  }
+}
