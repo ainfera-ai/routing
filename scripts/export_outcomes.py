@@ -26,10 +26,12 @@ script does NOT talk to the database - it reads a raw-rows JSON dump from a
 file or stdin. The dump is produced by a thin, documented query step that
 the daily cadence (AIN-298, on Spark) or a one-off run owns: a SELECT over
 routing_outcomes (task_type, cell, chosen_model_slug, reward,
-policy_version, created_at, judge_status, source, fleet_agent,
-traffic_origin) emitted as a JSON list. `fleet_agent` drives the
-neutrality-rider down-weight (AIN-388, below) and `traffic_origin` the
-P2-forward degraded-exclude — include both columns in the dump query.
+policy_version, created_at, judge_status, source, tenant_id, fleet_agent,
+traffic_origin) emitted as a JSON list. `tenant_id` drives the
+neutrality-rider down-weight (AIN-391 §2a / AIN-388, below — the
+authoritative key), `fleet_agent` is now only a transitional fallback, and
+`traffic_origin` the P2-forward degraded-exclude — include all three columns
+in the dump query.
 Pipe that JSON into this projector, then into refit_policy.py:
 
     export_outcomes.py --rows dump.json --out observations.json
@@ -54,11 +56,14 @@ from typing import Any
 # ── AIN-388 P0-tail · neutrality rider (down-weight internal-fleet,
 # exclude only degraded) ─────────────────────────────────────────────────
 #
-# A row whose `fleet_agent` is set originated from the internal Valinor
-# fleet (tagged off the shared fleet tenant by the api write path, AIN-388 —
-# NOT owner_handle). The fleet must never train on its own dogfood at full
-# strength, but the pre-launch fleet dogfood IS the seed proof, so we KEEP
-# those rows at a reduced weight rather than excluding them. Degraded/MLX
+# An internal-fleet row is keyed off the row's `tenant_id` matching the
+# shared fleet tenant (AIN-391 §2a) — the SAME keystone the api write path
+# tags on (services/routing_brain._is_fleet_agent), NOT owner_handle, and no
+# longer the `fleet_agent` tag. Keying on the tag left a gap: a fleet row
+# whose per-agent tag was never written (NULL fleet_agent) leaked into the
+# moat dataset at FULL weight. The fleet must never train on its own dogfood
+# at full strength, but the pre-launch fleet dogfood IS the seed proof, so we
+# KEEP those rows at a reduced weight rather than excluding them. Degraded/MLX
 # fallback rows (P2) are the only ones EXCLUDED outright.
 #
 # FOUNDER-TUNE: the down-weight constant is moat-methodology. It defaults to
@@ -84,6 +89,53 @@ def fleet_downweight() -> float:
         # degraded-EXCLUDE path, not down-weight. Refuse to silently drop.
         return _FLEET_DOWNWEIGHT_DEFAULT
     return min(1.0, w)
+
+
+# ── AIN-391 §2a · key the down-weight off `tenant_id` (retire fleet_agent) ──
+#
+# The authoritative fleet signal is the routing_outcomes row's `tenant_id`
+# matching the shared fleet tenant — byte-identical keystone + idiom to the
+# api write path (services/routing_brain._FLEET_TENANT_IDS_DEFAULT /
+# _csv_id_set / additive AINFERA_FLEET_TENANT_IDS). The default fleet tenant
+# is ALWAYS treated as fleet; the env is purely ADDITIVE so a config edit can
+# never silently un-tag the live fleet back into moat contamination.
+_FLEET_TENANT_IDS_ENV = "AINFERA_FLEET_TENANT_IDS"
+_FLEET_TENANT_IDS_DEFAULT = "280f4469-d318-4ec4-9c63-f3ea83466b03"
+
+
+def _csv_id_set(raw: str | None) -> frozenset[str]:
+    """Comma-separated UUID list → lowercased set (UUIDs are canonical-lower)."""
+    if not raw:
+        return frozenset()
+    return frozenset(p.strip().lower() for p in raw.split(",") if p.strip())
+
+
+def _fleet_tenant_ids() -> frozenset[str]:
+    """Tenant ids treated as internal fleet: the default constant plus the
+    additive env (never a replace — see api idiom)."""
+    return _csv_id_set(_FLEET_TENANT_IDS_DEFAULT) | _csv_id_set(
+        os.environ.get(_FLEET_TENANT_IDS_ENV)
+    )
+
+
+def is_fleet_row(row: dict[str, Any]) -> bool:
+    """True iff a routing_outcomes row is internal-fleet (AIN-391 §2a).
+
+    Authoritative key: the row's ``tenant_id`` is in the fleet-tenant set —
+    the SAME signal the api write path tags on, so a fleet row trains
+    down-weighted even when its per-agent ``fleet_agent`` tag was never
+    written (the gap fleet_agent-keying left open).
+
+    Transitional fallback: a truthy ``fleet_agent`` still marks a row as
+    fleet, so dumps emitted before ``tenant_id`` was added to the SELECT keep
+    their down-weight. fleet_agent is no longer the primary key; this fallback
+    retires once every dump carries ``tenant_id``.
+    """
+    tid = str(row.get("tenant_id") or "").strip().lower()
+    if tid and tid in _fleet_tenant_ids():
+        return True
+    return bool(row.get("fleet_agent"))
+
 
 # Defensive only: the stored section-16 cell already carries the band as
 # its 3rd segment (authoritative). This map reconstructs the band only when
@@ -150,11 +202,12 @@ def project_rows(
     Filters to `source` unless `allow_mixed`. Deterministic tick ordering
     by created_at so a re-export of the same rows yields identical ticks.
 
-    Neutrality rider (AIN-388 P0-tail): internal-fleet rows (``fleet_agent``
-    set) are KEPT but emitted with ``weight = fleet_downweight()`` (< 1) so
-    the fleet never trains on its own dogfood at full strength; degraded/MLX
-    rows are EXCLUDED outright (never emitted). External/customer rows keep
-    ``weight = 1``.
+    Neutrality rider (AIN-391 §2a / AIN-388 P0-tail): internal-fleet rows
+    (``tenant_id`` in the fleet-tenant set; ``fleet_agent`` fallback for
+    legacy dumps) are KEPT but emitted with ``weight = fleet_downweight()``
+    (< 1) so the fleet never trains on its own dogfood at full strength;
+    degraded/MLX rows are EXCLUDED outright (never emitted). External/customer
+    rows keep ``weight = 1``.
     """
     fleet_w = fleet_downweight()
     seen_sources: set[str] = set()
@@ -185,7 +238,7 @@ def project_rows(
     kept.sort(key=lambda r: (str(r.get("created_at") or ""), str(r.get("cell") or "")))
     out: list[dict[str, Any]] = []
     for tick, r in enumerate(kept):
-        is_fleet = bool(r.get("fleet_agent"))
+        is_fleet = is_fleet_row(r)
         out.append(
             {
                 "cell": bandit_cell(
