@@ -1,0 +1,436 @@
+{
+  "generated_at": "2026-06-08",
+  "source": "routing_outcomes (prod, Supabase dftfpwzqxoebwzepygzl) \u00b7 labeled+reward \u00b7 degraded-excluded \u00b7 per-cell temporal split 0.7 \u00b7 catalog=enrolled-5 snapshot \u00b7 floors=api CELL_MIN_QUALITY (AIN-388)",
+  "catalog": [
+    {
+      "model_slug": "mistral-large-3",
+      "brand_slug": "mistral",
+      "q_prior": 0.74,
+      "price_in": 2.0,
+      "price_out": 6.0,
+      "m_allowed": true
+    },
+    {
+      "model_slug": "gemini-3-1-pro",
+      "brand_slug": "google",
+      "q_prior": 0.87,
+      "price_in": 1.25,
+      "price_out": 10.0,
+      "m_allowed": true
+    },
+    {
+      "model_slug": "grok-4",
+      "brand_slug": "xai",
+      "q_prior": 0.86,
+      "price_in": 5.0,
+      "price_out": 15.0,
+      "m_allowed": true
+    },
+    {
+      "model_slug": "gpt-5-5",
+      "brand_slug": "openai",
+      "q_prior": 0.9,
+      "price_in": 5.0,
+      "price_out": 15.0,
+      "m_allowed": true
+    },
+    {
+      "model_slug": "claude-opus-4-7",
+      "brand_slug": "anthropic",
+      "q_prior": 0.95,
+      "price_in": 15.0,
+      "price_out": 75.0,
+      "m_allowed": true
+    }
+  ],
+  "floors": {
+    "reasoning": 0.88,
+    "code": 0.78,
+    "tool_use": 0.78,
+    "general": 0.68,
+    "chat": 0.58,
+    "extraction": 0.58,
+    "embed": 0.52
+  },
+  "default_floor": 0.5,
+  "aggregates": [
+    {
+      "bandit_cell": "chat:cost",
+      "task": "chat",
+      "arm": "gemini-3-1-flash",
+      "split": "holdout",
+      "outcome_class": "failed",
+      "n": 5,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "chat:cost",
+      "task": "chat",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 24,
+      "reward_sum": 17.25
+    },
+    {
+      "bandit_cell": "chat:cost",
+      "task": "chat",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 67,
+      "reward_sum": 57.0
+    },
+    {
+      "bandit_cell": "code:balanced",
+      "task": "code",
+      "arm": "gemini-3-1-pro",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 2,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "code:balanced",
+      "task": "code",
+      "arm": "gemini-3-1-pro",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 10,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "code:balanced",
+      "task": "code",
+      "arm": "gpt-5-5",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 4,
+      "reward_sum": 0.75
+    },
+    {
+      "bandit_cell": "code:balanced",
+      "task": "code",
+      "arm": "gpt-5-5",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "code:cost",
+      "task": "code",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 21,
+      "reward_sum": 15.75
+    },
+    {
+      "bandit_cell": "code:cost",
+      "task": "code",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "code:cost",
+      "task": "code",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 45,
+      "reward_sum": 32.25
+    },
+    {
+      "bandit_cell": "embed:cost",
+      "task": "embed",
+      "arm": "claude-opus-4-7",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.5
+    },
+    {
+      "bandit_cell": "embed:cost",
+      "task": "embed",
+      "arm": "gemini-3-1-flash-lite",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 4,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "embed:cost",
+      "task": "embed",
+      "arm": "gemini-3-1-pro",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "embed:cost",
+      "task": "embed",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 3,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "embed:cost",
+      "task": "embed",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "extraction:cost",
+      "task": "extraction",
+      "arm": "gemini-3-1-flash",
+      "split": "holdout",
+      "outcome_class": "failed",
+      "n": 7,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "extraction:cost",
+      "task": "extraction",
+      "arm": "gemini-3-1-pro",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "extraction:cost",
+      "task": "extraction",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 18,
+      "reward_sum": 17.75
+    },
+    {
+      "bandit_cell": "extraction:cost",
+      "task": "extraction",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 3,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "extraction:cost",
+      "task": "extraction",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "other",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "extraction:cost",
+      "task": "extraction",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 54,
+      "reward_sum": 47.0
+    },
+    {
+      "bandit_cell": "general:cost",
+      "task": "general",
+      "arm": "gemini-3-1-flash",
+      "split": "holdout",
+      "outcome_class": "failed",
+      "n": 4,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "general:cost",
+      "task": "general",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 22,
+      "reward_sum": 17.5
+    },
+    {
+      "bandit_cell": "general:cost",
+      "task": "general",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 10,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "general:cost",
+      "task": "general",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 50,
+      "reward_sum": 39.0
+    },
+    {
+      "bandit_cell": "reasoning:balanced",
+      "task": "reasoning",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.25
+    },
+    {
+      "bandit_cell": "reasoning:balanced",
+      "task": "reasoning",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.25
+    },
+    {
+      "bandit_cell": "reasoning:cost",
+      "task": "reasoning",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 22,
+      "reward_sum": 22.0
+    },
+    {
+      "bandit_cell": "reasoning:cost",
+      "task": "reasoning",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "reasoning:cost",
+      "task": "reasoning",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 47,
+      "reward_sum": 43.75
+    },
+    {
+      "bandit_cell": "reasoning:quality",
+      "task": "reasoning",
+      "arm": "claude-opus-4-7",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 1.0
+    },
+    {
+      "bandit_cell": "reasoning:quality",
+      "task": "reasoning",
+      "arm": "gemini-3-1-pro",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 2,
+      "reward_sum": 1.25
+    },
+    {
+      "bandit_cell": "reasoning:quality",
+      "task": "reasoning",
+      "arm": "gpt-5-5",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 10,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "reasoning:quality",
+      "task": "reasoning",
+      "arm": "gpt-5-5",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 3,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "reasoning:quality",
+      "task": "reasoning",
+      "arm": "gpt-5-5",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 15,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "tool_use:balanced",
+      "task": "tool_use",
+      "arm": "claude-sonnet-4-7",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "tool_use:balanced",
+      "task": "tool_use",
+      "arm": "gemini-3-1-pro",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 4,
+      "reward_sum": 0.75
+    },
+    {
+      "bandit_cell": "tool_use:balanced",
+      "task": "tool_use",
+      "arm": "gemini-3-1-pro",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 6,
+      "reward_sum": 0.75
+    },
+    {
+      "bandit_cell": "tool_use:balanced",
+      "task": "tool_use",
+      "arm": "gpt-5-5",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 1,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "tool_use:cost",
+      "task": "tool_use",
+      "arm": "mistral-large-3",
+      "split": "holdout",
+      "outcome_class": "succeeded",
+      "n": 21,
+      "reward_sum": 3.25
+    },
+    {
+      "bandit_cell": "tool_use:cost",
+      "task": "tool_use",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "failed",
+      "n": 11,
+      "reward_sum": 0.0
+    },
+    {
+      "bandit_cell": "tool_use:cost",
+      "task": "tool_use",
+      "arm": "mistral-large-3",
+      "split": "train",
+      "outcome_class": "succeeded",
+      "n": 35,
+      "reward_sum": 6.0
+    }
+  ]
+}
