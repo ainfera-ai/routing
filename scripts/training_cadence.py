@@ -66,7 +66,15 @@ def _incumbent_artifact(policies_dir: Path) -> Path | None:
         return None
     version = json.loads(active.read_text(encoding="utf-8"))["version"]
     artifact = policies_dir / f"{version}.json"
-    return artifact if artifact.is_file() else None
+    if not artifact.is_file():
+        # ACTIVE.json points at a deleted/missing version artifact — broken
+        # state, not a cold start. Fail closed so the gate cannot be bypassed
+        # by clobbering or losing the incumbent file.
+        raise RuntimeError(
+            f"ACTIVE.json points at missing artifact {artifact.name}; "
+            "refusing cold-start fallback. Restore the policy or reset ACTIVE."
+        )
+    return artifact
 
 
 def _flip_active(policies_dir: Path, version: str) -> str | None:
@@ -231,7 +239,17 @@ def run_cadence(
         gate_row["promoted"] = True
         gate_row["promote_reason"] = "cadence_applied_promote"
     elif should_promote:
+        # Dry run: gates passed but operator did not pass --apply-promote.
+        # Force promoted=false in the emitted DB row so the downstream insert
+        # cannot claim a flip that did not happen.
+        gate_row["promoted"] = False
         gate_row["promote_reason"] = "gates_passed_apply_promote_not_set"
+    elif promotion_passed and not replay_ok:
+        # Promotion gate passed but the optional replay bundle held the line.
+        # build_training_run_row had already set promoted=true from the
+        # promotion gate alone; correct it so the emitted row matches cadence.
+        gate_row["promoted"] = False
+        gate_row["promote_reason"] = f"replay_gate_failed:{replay_verdict}"
 
     training_run_path = workdir / "training_run.json"
     training_run_path.write_text(json.dumps(gate_row, indent=2) + "\n", encoding="utf-8")
@@ -297,7 +315,10 @@ def main(argv: list[str] | None = None) -> int:
             apply_promote=args.apply_promote,
             min_observations=args.min_observations,
         )
-    except (ValueError, RuntimeError) as exc:
+    except (ValueError, RuntimeError, SystemExit) as exc:
+        # export_outcomes.project_rows raises SystemExit for INVARIANT 1
+        # (mixed sources). Catch it here so the cron wrapper sees a uniform
+        # "cadence failed: ..." + exit code 2 instead of a SystemExit traceback.
         print(f"cadence failed: {exc}", file=sys.stderr)
         return 2
 
