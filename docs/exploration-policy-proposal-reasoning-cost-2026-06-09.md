@@ -75,3 +75,37 @@ re-run on post-AIN-403 data and explicitly asks for it.
 
 **Stop point: this proposal. No env is set, no code path enabled. Founder gates
 every step.**
+
+---
+
+## STATUS UPDATE 2026-06-09 — Part B BUILT (inert); sequence steps 1–3 done
+
+- **Step 1 (AIN-403)** — DONE, merged + deployed, contaminated rows re-judged.
+- **Step 2 (real gpt-5-5 reward)** — accumulated: reasoning:quality gpt-5-5 holdout
+  recovered 0.0000(10) → 0.6172(32); the `judge_mono_zero` flag cleared.
+- **Step 3 (re-run the gate)** — DONE on the clean corpus
+  (`routing#16 docs/replay-gate-report-2026-06-09-clean.md`). Verdict **still
+  `FAIL_CLOSED`**, now `NO_CHANGE=8 / UNCERTIFIABLE=3`. The surviving blockers are
+  **positivity/overlap only** — incl. `reasoning:cost`, where mistral has held-out
+  support but gpt-5-5's *current-conditions* side does not (`cov(holdout,n=0)`).
+  So the gate did **not** self-certify the flip; Part B's mechanism is the
+  remaining lever.
+
+**Part B is now BUILT and INERT** (this PR):
+- `ainfera_routing/explore.py` — `select_counterfactual()` (pure, RNG-free; caller
+  supplies the roll) + `eligible_arms()` + `kappa_from_env()` / `cells_from_env()`.
+- Defaults `κ=0`, `cells=∅` → **always returns `None`** → caller byte-identical to
+  pre-Part-B. `decide.py` is untouched.
+- `tests/test_explore.py` (36 tests) pins the inert contract and the safety
+  invariants (only enrolled + static-floor-dropped + `q_empirical ≥ floor` arms are
+  ever served; never an unenrolled/vetoed model; never a greedy-reachable arm).
+- `scripts/counterfactual_dryrun.py` demonstrates — serving nothing — that arming
+  `reasoning:cost` would serve mistral-large-3 (prior 0.74 < 0.88 ≤ q_emp 0.9529),
+  creating the mistral↔gpt-5-5 head-to-head the gate's positivity guard needs.
+
+**Still NOT done (founder gates, unchanged):**
+- The **live wire-in** (api `routing_brain` reading the κ/cells env, doing the roll,
+  serving the pick) — a **§17 routing-methodology amendment + founder approval**.
+- Setting `κ>0` on any cell. Scope when enabled: **fleet/dogfood traffic only**,
+  `reasoning:cost` first; customer routing quality untouched.
+- The eventual LinUCB cutover (its own founder gate; the gate must certify first).
