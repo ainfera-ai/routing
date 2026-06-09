@@ -118,9 +118,10 @@ def cmd_refit(args: argparse.Namespace) -> int:
     }
     POLICIES_DIR.mkdir(exist_ok=True)
     (POLICIES_DIR / f"{version}.json").write_text(json.dumps(artifact, indent=2) + "\n")
-    prev = _set_active(version)
+    prev = None if args.no_flip_active else _set_active(version)
     _audit({"event": "refit", "version": version, "source": args.source,
-            "n_observations": len(obs), "from": prev, "at": ts})
+            "n_observations": len(obs), "from": prev, "at": ts,
+            "flip_active": not args.no_flip_active})
     print(version)
     return 0
 
@@ -170,6 +171,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--alpha", default="1.0")
     r.add_argument("--exploration-floor", default="0.05")
     r.add_argument("--decay-half-life", type=int, default=None)
+    r.add_argument(
+        "--no-flip-active",
+        action="store_true",
+        help="write candidate artifact only; do not repoint ACTIVE (cadence gate step)",
+    )
     r.set_defaults(fn=cmd_refit)
 
     b = sub.add_parser("rollback", help="repoint ACTIVE to a prior version")
