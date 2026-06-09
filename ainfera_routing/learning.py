@@ -340,6 +340,25 @@ class LinUCBConsumer:
     def to_json(self) -> str:
         return json.dumps(self.serialize(), separators=(",", ":"), sort_keys=True)
 
+    @classmethod
+    def from_serialized(cls, blob: dict[str, Any]) -> LinUCBConsumer:
+        """Rehydrate from :meth:`serialize` output or a refit policy artifact."""
+        consumer = cls(
+            alpha=Decimal(str(blob["alpha"])),
+            exploration_floor=Decimal(str(blob["exploration_floor"])),
+            decay_half_life=blob.get("decay_half_life"),
+        )
+        for cell, arms in blob.get("cells", {}).items():
+            cell_state: dict[str, CellModelStats] = {}
+            for slug, stats in arms.items():
+                cell_state[slug] = CellModelStats(
+                    A=Decimal(str(stats["A"])),
+                    b=Decimal(str(stats["b"])),
+                    n=int(stats["n"]),
+                )
+            consumer.state[cell] = cell_state
+        return consumer
+
 
 # ── replay (deterministic check over an observation list) ───────────────
 

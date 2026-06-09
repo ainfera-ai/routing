@@ -338,3 +338,11 @@ def test_zero_weight_is_inert_but_counts() -> None:
     stats = c.state["c1"]["m1"]
     assert stats.mean() == Decimal("0.4")  # the weight-0 reward adds nothing
     assert stats.n == 2
+
+
+def test_from_serialized_roundtrip() -> None:
+    c = LinUCBConsumer()
+    c.ingest([_obs("reasoning:cost", "mistral-large-3", 0.9)])
+    restored = LinUCBConsumer.from_serialized(c.serialize())
+    assert restored.to_json() == c.to_json()
+    assert restored.q_empirical("reasoning:cost", "mistral-large-3") == Decimal("0.9")
