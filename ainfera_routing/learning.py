@@ -342,7 +342,15 @@ class LinUCBConsumer:
 
     @classmethod
     def from_serialized(cls, blob: dict[str, Any]) -> LinUCBConsumer:
-        """Rehydrate from :meth:`serialize` output or a refit policy artifact."""
+        """Rehydrate from :meth:`serialize` output or a refit policy artifact.
+
+        Accepts either the flat shape produced by :meth:`serialize` (``alpha``,
+        ``exploration_floor``, ``decay_half_life``, ``cells`` at the top level)
+        or the versioned policy envelope written by ``scripts/refit_policy.py``
+        (with the serialized state nested under ``state``).
+        """
+        if "state" in blob and isinstance(blob["state"], dict):
+            blob = blob["state"]
         consumer = cls(
             alpha=Decimal(str(blob["alpha"])),
             exploration_floor=Decimal(str(blob["exploration_floor"])),

@@ -346,3 +346,21 @@ def test_from_serialized_roundtrip() -> None:
     restored = LinUCBConsumer.from_serialized(c.serialize())
     assert restored.to_json() == c.to_json()
     assert restored.q_empirical("reasoning:cost", "mistral-large-3") == Decimal("0.9")
+
+
+def test_from_serialized_accepts_refit_policy_envelope() -> None:
+    """A serve-time loader passes the full `policy-*.json` artifact (as written
+    by `scripts/refit_policy.py`, with state nested under `state`) straight into
+    `from_serialized`; that envelope shape must rehydrate identically.
+    """
+    c = LinUCBConsumer()
+    c.ingest([_obs("reasoning:cost", "mistral-large-3", 0.9)])
+    envelope = {
+        "version": "policy-test-deadbeef",
+        "source": "synthetic",
+        "n_observations": 1,
+        "knobs": {"alpha": "1.0", "exploration_floor": "0.05", "decay_half_life": None},
+        "state": c.serialize(),
+    }
+    restored = LinUCBConsumer.from_serialized(envelope)
+    assert restored.to_json() == c.to_json()
