@@ -1,0 +1,26 @@
+# AIN-237 · gitleaks config for routing (moat / LinUCB service).
+
+title = "ainfera-routing gitleaks"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "ainfera-bearer-key"
+description = "Ainfera bearer key prefix."
+regex = '''(ainfera_(test_)?|ai_(infera|prd|stg|dev)_)[A-Za-z0-9_-]{24,}'''
+entropy = 4.3
+keywords = ["ainfera_", "ai_infera_", "ai_prd_", "ai_stg_", "ai_dev_"]
+
+[[rules]]
+id = "ainfera-doppler-token"
+description = "Doppler service/personal token."
+regex = '''dp\.(ct|st|pt|sa)\.[A-Za-z0-9_-]{1,}\.[A-Za-z0-9_-]{40,}'''
+keywords = ["dp.ct.", "dp.st.", "dp.pt.", "dp.sa."]
+
+[allowlist]
+paths = [
+    '''\.github/.*''',
+    '''tests/.*''',
+    '''docs/.*''',
+]
