@@ -66,7 +66,12 @@ def _incumbent_artifact(policies_dir: Path) -> Path | None:
         return None
     version = json.loads(active.read_text(encoding="utf-8"))["version"]
     artifact = policies_dir / f"{version}.json"
-    return artifact if artifact.is_file() else None
+    if not artifact.is_file():
+        raise RuntimeError(
+            f"ACTIVE.json points at missing incumbent artifact {artifact.name}; "
+            "refusing to treat as cold start"
+        )
+    return artifact
 
 
 def _flip_active(policies_dir: Path, version: str) -> str | None:
@@ -297,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             apply_promote=args.apply_promote,
             min_observations=args.min_observations,
         )
-    except (ValueError, RuntimeError) as exc:
+    except (ValueError, RuntimeError, SystemExit) as exc:
         print(f"cadence failed: {exc}", file=sys.stderr)
         return 2
 

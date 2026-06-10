@@ -14,6 +14,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DATE_STAMP="$(date -u +%F)"
+: "${AINFERA_POLICIES_DIR:?AINFERA_POLICIES_DIR must be set (versioned policy artifacts + ACTIVE.json)}"
+POLICIES_DIR="${AINFERA_POLICIES_DIR}"
 WORKROOT="${AINFERA_CADENCE_ROOT:-/var/ainfera/cadence}"
 WORKDIR="${WORKROOT}/${DATE_STAMP}"
 ROWS="${AINFERA_ROWS_DUMP:-/var/ainfera/dumps/routing_outcomes-${DATE_STAMP}.json}"
@@ -32,6 +34,7 @@ fi
 CMD=(python3 "$ROOT/scripts/training_cadence.py" run
   --rows "$ROWS"
   --workdir "$WORKDIR"
+  --policies-dir "$POLICIES_DIR"
   --source prod
   --judge-model "${AINFERA_JUDGE_MODEL:-claude-opus-4-7}"
   "${APPLY[@]}"
