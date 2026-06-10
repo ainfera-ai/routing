@@ -308,7 +308,7 @@ This script reflects these locks:
 - **API key prefix `ainfera_*`** (memory #16, locked 2026-05-16 PM)
 - **Settlement deferred 2 weeks** (memory #17) — script doesn't test Stripe / x402 settlement; only the free-tier prepaid ledger
 - **No Stripe/x402 code paths exercised Sunday** — exactly per #17
-- **6 dogfood agents + AAMC voters** are separate from this script — this script creates its own anonymous test agent
+- **6 dogfood agents + routing catalog backends** are separate from this script — this script creates its own anonymous test agent
 - **Done = curl + browser verify** (memory #28) — this script IS the curl half; humans/agents can pair with `app.ainfera.ai` browser walk for the second half
 
 Linear:
