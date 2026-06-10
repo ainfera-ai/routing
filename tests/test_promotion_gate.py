@@ -25,7 +25,9 @@ def test_rehydrate_roundtrip_preserves_q():
     c = replay(obs)
     state = c.serialize()
     c2 = pg._consumer_from_state(state)
-    assert c2.q_empirical("chat:cost", "mistral-large-3") == c.q_empirical("chat:cost", "mistral-large-3")
+    assert c2.q_empirical("chat:cost", "mistral-large-3") == c.q_empirical(
+        "chat:cost", "mistral-large-3"
+    )
 
 
 def test_gate_promotes_on_improvement():
@@ -35,7 +37,9 @@ def test_gate_promotes_on_improvement():
     inc = replay(inc_obs)
     cand = replay(cand_obs)
     # observations the gate scores over = candidate's chosen arms
-    g = pg.evaluate_gate(inc, cand, cand_obs, incumbent_ruleset_hash="h", candidate_ruleset_hash="h")
+    g = pg.evaluate_gate(
+        inc, cand, cand_obs, incumbent_ruleset_hash="h", candidate_ruleset_hash="h"
+    )
     # candidate has gemini@0.9 where incumbent never saw gemini -> no comparable pair
     # so this exercises the "no comparable cells" guard
     assert g["gates"]["g3_ruleset_stable"] is True
@@ -56,7 +60,9 @@ def test_gate_detects_regression():
     cand_obs = [_obs("chat:cost", "mistral-large-3", "0.5", i) for i in range(20)]
     inc = replay(inc_obs)
     cand = replay(cand_obs)
-    g = pg.evaluate_gate(inc, cand, cand_obs, incumbent_ruleset_hash="h", candidate_ruleset_hash="h")
+    g = pg.evaluate_gate(
+        inc, cand, cand_obs, incumbent_ruleset_hash="h", candidate_ruleset_hash="h"
+    )
     assert g["replay_gate_passed"] is False
     assert "regression" in g["promote_reason"]
 

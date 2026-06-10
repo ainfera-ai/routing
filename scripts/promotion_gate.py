@@ -67,7 +67,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ainfera_routing.learning import LinUCBConsumer, Observation  # noqa: E402
+from ainfera_routing.learning import LinUCBConsumer, Observation
 
 
 def _load_state(path: Path) -> dict[str, Any]:
@@ -100,7 +100,7 @@ def _consumer_from_state(state: dict[str, Any]) -> LinUCBConsumer:
 def _q(consumer: LinUCBConsumer, cell: str, slug: str) -> Decimal | None:
     try:
         return consumer.q_empirical(cell, slug)
-    except Exception:  # noqa: BLE001 - missing cell/model -> no estimate
+    except Exception:
         return None
 
 
@@ -213,7 +213,8 @@ def build_training_run_row(
         "promoted": promoted,
         "promote_reason": reason,
         "delta_done_rate": gate["delta_done_rate"],
-        "delta_cost_usd": None,  # cost delta wired when candidate carries cost; not in q-only replay
+        # cost delta wired when candidate carries cost; not in q-only replay
+        "delta_cost_usd": None,
         "replay_gate_passed": passed,
         "per_cell": gate["per_cell"],
         "exploration_floor": exploration_floor,
@@ -239,7 +240,9 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="AIN-335 Stage 2 promotion gate + training_runs row")
     p.add_argument("--incumbent", required=True, help="incumbent (ACTIVE) policy artifact json")
     p.add_argument("--candidate", required=True, help="candidate refit policy artifact json")
-    p.add_argument("--observations", required=True, help="observations.json (export_outcomes output)")
+    p.add_argument(
+        "--observations", required=True, help="observations.json (export_outcomes output)"
+    )
     p.add_argument("--judge-model", required=True)
     p.add_argument("--cadence", default="daily")
     p.add_argument("--source", default="prod")
