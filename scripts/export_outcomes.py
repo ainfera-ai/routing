@@ -51,6 +51,7 @@ import json
 import os
 import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 # ── AIN-388 P0-tail · neutrality rider (down-weight internal-fleet,
@@ -158,7 +159,9 @@ def _band_from_policy_version(policy_version: str | None) -> str:
     return _BAND_BY_PRESET.get(preset, "balanced")
 
 
-def bandit_cell(*, stored_cell: str | None, task_type: str | None, policy_version: str | None) -> str:
+def bandit_cell(
+    *, stored_cell: str | None, task_type: str | None, policy_version: str | None
+) -> str:
     """Project the section-16 coverage cell down to the model-free bandit cell.
 
     Primary path: stored cell `task:model:band` -> `task:band` (drop the
@@ -281,10 +284,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rows", help="raw-rows JSON file (list of dicts); default stdin")
     p.add_argument("--out", help="observations.json output path; default stdout")
     p.add_argument("--source", default="prod", help="source filter (default prod)")
-    p.add_argument("--allow-mixed", action="store_true", help="offline analysis only; disables INVARIANT 1")
+    p.add_argument(
+        "--allow-mixed", action="store_true", help="offline analysis only; disables INVARIANT 1"
+    )
     args = p.parse_args(argv)
 
-    raw_text = open(args.rows).read() if args.rows else sys.stdin.read()
+    raw_text = Path(args.rows).read_text() if args.rows else sys.stdin.read()
     rows = json.loads(raw_text)
     if not isinstance(rows, list):
         raise SystemExit("expected a JSON list of row objects")
@@ -293,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = json.dumps(observations, indent=2) + "\n"
     if args.out:
-        open(args.out, "w").write(payload)
+        Path(args.out).write_text(payload)
     else:
         sys.stdout.write(payload)
     print(_summary(observations), file=sys.stderr)

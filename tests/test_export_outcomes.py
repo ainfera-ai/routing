@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.export_outcomes import bandit_cell, fleet_downweight, project_rows
+from scripts.export_outcomes import (
+    _FLEET_TENANT_IDS_DEFAULT,
+    bandit_cell,
+    fleet_downweight,
+    project_rows,
+)
 
 
 def _row(**kw):
@@ -198,10 +203,14 @@ def test_fleet_keyed_off_tenant_id_proof_matrix():
     down-weighted to the SAME weight purely on tenant_id; C(customer) full;
     D(degraded) excluded."""
     obs = project_rows([
-        _row(chosen_model_slug="A", tenant_id=_FLEET_TENANT, fleet_agent="namo"),   # A fleet, tagged
-        _row(chosen_model_slug="B", tenant_id=_FLEET_TENANT, fleet_agent=None),      # B fleet, NULL tag (the gap)
-        _row(chosen_model_slug="C", tenant_id=_CUSTOMER_TENANT, fleet_agent=None),   # C customer
-        _row(chosen_model_slug="D", tenant_id=_FLEET_TENANT, traffic_origin="mlx"),  # D degraded
+        # A fleet, tagged
+        _row(chosen_model_slug="A", tenant_id=_FLEET_TENANT, fleet_agent="namo"),
+        # B fleet, NULL tag (the gap)
+        _row(chosen_model_slug="B", tenant_id=_FLEET_TENANT, fleet_agent=None),
+        # C customer
+        _row(chosen_model_slug="C", tenant_id=_CUSTOMER_TENANT, fleet_agent=None),
+        # D degraded
+        _row(chosen_model_slug="D", tenant_id=_FLEET_TENANT, traffic_origin="mlx"),
     ])
     w = {o["model_slug"]: o["weight"] for o in obs}
     assert "D" not in w, "degraded fleet row excluded outright"
@@ -225,7 +234,9 @@ def test_fleet_tenant_env_is_additive_never_replaces(monkeypatch):
     ])
     w = {o["model_slug"]: o["weight"] for o in obs}
     assert w["extra"] == fleet_downweight(), "env-added tenant treated as fleet"
-    assert w["default"] == fleet_downweight(), "default fleet tenant stays fleet (additive, not replace)"
+    assert w["default"] == fleet_downweight(), (
+        "default fleet tenant stays fleet (additive, not replace)"
+    )
 
 
 def test_fleet_agent_fallback_for_legacy_dumps_without_tenant_id():
@@ -244,5 +255,4 @@ def test_routing_fleet_tenant_keystone_matches_api_constant():
     """Cross-repo lock: the projector's fleet tenant MUST equal the literal the
     api write path tags on (api services/routing_brain._FLEET_TENANT_IDS_DEFAULT
     + its own test). A drift in either repo would split fleet detection."""
-    from scripts.export_outcomes import _FLEET_TENANT_IDS_DEFAULT
     assert _FLEET_TENANT_IDS_DEFAULT == "280f4469-d318-4ec4-9c63-f3ea83466b03"
