@@ -188,6 +188,35 @@ def test_fleet_and_degraded_combined():
     assert obs[0]["weight"] == fleet_downweight()
 
 
+def test_synthetic_probes_excluded_not_downweighted():
+    """AIN-424: synthetic health/routing probes are dropped outright, not kept
+    at the 0.25 dogfood weight. Authoritative key = traffic_class; fallback =
+    the fleet_agent probe label for dumps predating the column. A real fleet
+    agent (no probe signal) is still kept + down-weighted."""
+    rows = [
+        _row(chosen_model_slug="clean"),                                       # external → full
+        _row(chosen_model_slug="p1", traffic_class="internal_probe"),          # authoritative
+        _row(chosen_model_slug="p2", fleet_agent="routed-probe"),          # fallback
+        _row(chosen_model_slug="p3", fleet_agent="nt1-probe-1779468321"),  # fallback (ts)
+        _row(chosen_model_slug="keep", fleet_agent="tulkas"),              # real fleet → dw
+    ]
+    obs = project_rows(rows)
+    by_model = {o["model_slug"]: o["weight"] for o in obs}
+    assert set(by_model) == {"clean", "keep"}, "all three probe shapes excluded"
+    assert by_model["clean"] == 1.0
+    assert by_model["keep"] == fleet_downweight()
+
+
+def test_internal_probe_traffic_class_wins_over_fleet_tenant():
+    # A probe row that ALSO sits on the fleet tenant is still excluded (probe
+    # class is stronger than the dogfood down-weight).
+    obs = project_rows([
+        _row(chosen_model_slug="probe", tenant_id=_FLEET_TENANT_IDS_DEFAULT,
+             fleet_agent="routed-probe", traffic_class="internal_probe"),
+    ])
+    assert obs == []
+
+
 # ---- AIN-391 §2a: neutrality keyed off tenant_id, NOT the fleet_agent tag ---
 # The load-bearing gap fleet_agent-keying left: a fleet row whose per-agent
 # tag was never written (NULL fleet_agent) leaked into the moat at FULL weight.
