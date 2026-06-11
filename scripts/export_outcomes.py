@@ -27,11 +27,12 @@ file or stdin. The dump is produced by a thin, documented query step that
 the daily cadence (AIN-298, on Spark) or a one-off run owns: a SELECT over
 routing_outcomes (task_type, cell, chosen_model_slug, reward,
 policy_version, created_at, judge_status, source, tenant_id, fleet_agent,
-traffic_origin) emitted as a JSON list. `tenant_id` drives the
-neutrality-rider down-weight (AIN-391 §2a / AIN-388, below — the
-authoritative key), `fleet_agent` is now only a transitional fallback, and
-`traffic_origin` the P2-forward degraded-exclude — include all three columns
-in the dump query.
+traffic_origin, traffic_class) emitted as a JSON list. `tenant_id` drives
+the neutrality-rider down-weight (AIN-391 §2a / AIN-388, below — the
+authoritative key), `fleet_agent` is now only a transitional fallback,
+`traffic_origin` the P2-forward degraded-exclude, and `traffic_class`
+(AIN-424) the authoritative synthetic-probe exclude — include all four
+columns in the dump query.
 Pipe that JSON into this projector, then into refit_policy.py:
 
     export_outcomes.py --rows dump.json --out observations.json
