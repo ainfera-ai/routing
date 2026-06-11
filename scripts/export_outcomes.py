@@ -193,6 +193,27 @@ def _is_degraded(row: dict[str, Any]) -> bool:
     return False
 
 
+def _is_synthetic_probe(row: dict[str, Any]) -> bool:
+    """True iff a row is a synthetic health/routing probe (EXCLUDE, not just
+    down-weight). AIN-424: the AIN-285 cron probes are synthetic traffic, not
+    real task outcomes — their reward is not a clean signal of model quality
+    (same rationale as degraded), so they must never train the moat even at a
+    reduced weight. The fleet-dogfood down-weight (0.25) is for *real* internal
+    work; probes are a different class and are dropped outright.
+
+    Authoritative key: ``traffic_class == 'internal_probe'`` (the closed-
+    vocabulary provenance column added in migration 0057). Transitional
+    fallback for dumps emitted before ``traffic_class`` was added to the
+    SELECT: a ``fleet_agent`` probe label (``routed-probe`` / ``nt1-probe*`` /
+    any ``*-probe``). None of the 7 live fleet agents carry 'probe' in their
+    name, so the fallback cannot mis-drop a real agent.
+    """
+    if str(row.get("traffic_class") or "").lower() == "internal_probe":
+        return True
+    fa = str(row.get("fleet_agent") or "").lower()
+    return fa == "routed-probe" or fa.startswith("nt1-probe") or fa.endswith("-probe")
+
+
 def project_rows(
     rows: list[dict[str, Any]],
     *,
@@ -209,8 +230,9 @@ def project_rows(
     (``tenant_id`` in the fleet-tenant set; ``fleet_agent`` fallback for
     legacy dumps) are KEPT but emitted with ``weight = fleet_downweight()``
     (< 1) so the fleet never trains on its own dogfood at full strength;
-    degraded/MLX rows are EXCLUDED outright (never emitted). External/customer
-    rows keep ``weight = 1``.
+    degraded/MLX rows and synthetic ``internal_probe`` rows (AIN-424) are
+    EXCLUDED outright (never emitted). External/customer rows keep
+    ``weight = 1``.
     """
     fleet_w = fleet_downweight()
     seen_sources: set[str] = set()
@@ -229,6 +251,11 @@ def project_rows(
             # Degraded/MLX fallback — excluded, not down-weighted. A
             # degraded backend's reward is not a clean signal of the
             # routed model's quality.
+            continue
+        if _is_synthetic_probe(r):
+            # AIN-424: synthetic health/routing probes are excluded outright
+            # (not down-weighted) — they are not real task outcomes. The
+            # 0.25 dogfood down-weight is reserved for real internal work.
             continue
         kept.append(r)
 
