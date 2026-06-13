@@ -60,7 +60,7 @@ cd routing
 MODE=json ./scripts/ainfera-e2e.sh   # agent-parseable
 ```
 
-Spec: [`scripts/AINFERA-E2E.md`](scripts/AINFERA-E2E.md)
+Spec: [`scripts/ainfera-e2e.md`](scripts/ainfera-e2e.md)
 
 Outcome capture (methodology §16): [`docs/outcome-capture.md`](docs/outcome-capture.md)
 
