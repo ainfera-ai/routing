@@ -72,10 +72,11 @@ from ainfera_routing.learning import LinUCBConsumer, Observation
 
 def _load_state(path: Path) -> dict[str, Any]:
     """Load a refit_policy artifact and return its serialized consumer state."""
-    raw = json.loads(path.read_text())
+    raw: dict[str, Any] = json.loads(path.read_text())
     # refit_policy artifact nests the state under "state"; tolerate a bare
     # serialized state too.
-    return raw.get("state", raw)
+    result: dict[str, Any] = raw.get("state", raw)
+    return result
 
 
 def _consumer_from_state(state: dict[str, Any]) -> LinUCBConsumer:

@@ -300,15 +300,17 @@ def test_provenance_weight_downweights_mean_but_keeps_count() -> None:
     observation (n) — but contributes proportionally less to the mean.
     """
     c = LinUCBConsumer()
-    c.ingest([
-        _wobs("c1", "m1", 1.0, "1"),     # external, full weight
-        _wobs("c1", "m1", 0.0, "0.25"),  # internal-fleet, down-weighted
-    ])
+    c.ingest(
+        [
+            _wobs("c1", "m1", 1.0, "1"),  # external, full weight
+            _wobs("c1", "m1", 0.0, "0.25"),  # internal-fleet, down-weighted
+        ]
+    )
     stats = c.state["c1"]["m1"]
     # mean = (1*1.0 + 0.25*0.0) / (1 + 0.25) = 0.8  (vs 0.5 at equal weight)
     assert stats.mean() == Decimal("0.8")
-    assert Decimal("1.25") == stats.A   # weighted count
-    assert stats.n == 2                  # kept, NOT dropped
+    assert Decimal("1.25") == stats.A  # weighted count
+    assert stats.n == 2  # kept, NOT dropped
 
 
 def test_default_weight_is_one_and_matches_unweighted() -> None:

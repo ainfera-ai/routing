@@ -35,23 +35,42 @@ def _row(**kw):
 
 # ---- bandit_cell projection (the core fix) --------------------------------
 
+
 def test_bandit_cell_drops_model_segment():
-    assert bandit_cell(stored_cell="chat:mistral-large-3:cost", task_type="chat",
-                       policy_version="cost_first@1.0.0+x") == "chat:cost"
-    assert bandit_cell(stored_cell="reasoning:gemini-3-1-pro:quality", task_type="reasoning",
-                       policy_version="quality_first@1.0.0+x") == "reasoning:quality"
+    assert (
+        bandit_cell(
+            stored_cell="chat:mistral-large-3:cost",
+            task_type="chat",
+            policy_version="cost_first@1.0.0+x",
+        )
+        == "chat:cost"
+    )
+    assert (
+        bandit_cell(
+            stored_cell="reasoning:gemini-3-1-pro:quality",
+            task_type="reasoning",
+            policy_version="quality_first@1.0.0+x",
+        )
+        == "reasoning:quality"
+    )
 
 
 def test_bandit_cell_fallback_when_cell_absent_or_malformed():
     # No stored cell -> derive band from policy preset.
-    assert bandit_cell(stored_cell=None, task_type="code",
-                       policy_version="cost_first@1.0.0+x") == "code:cost"
+    assert (
+        bandit_cell(stored_cell=None, task_type="code", policy_version="cost_first@1.0.0+x")
+        == "code:cost"
+    )
     # Malformed (not 3-part) -> fallback path.
-    assert bandit_cell(stored_cell="weird", task_type="tool_use",
-                       policy_version="balanced@1.0.0+x") == "tool_use:balanced"
+    assert (
+        bandit_cell(stored_cell="weird", task_type="tool_use", policy_version="balanced@1.0.0+x")
+        == "tool_use:balanced"
+    )
     # Unknown preset -> balanced.
-    assert bandit_cell(stored_cell=None, task_type="general",
-                       policy_version="mystery@9+z") == "general:balanced"
+    assert (
+        bandit_cell(stored_cell=None, task_type="general", policy_version="mystery@9+z")
+        == "general:balanced"
+    )
 
 
 def test_two_models_same_task_band_share_one_bandit_cell():
@@ -70,6 +89,7 @@ def test_two_models_same_task_band_share_one_bandit_cell():
 
 # ---- filtering ------------------------------------------------------------
 
+
 def test_filters_non_prod_source():
     rows = [_row(source="prod"), _row(source="synthetic")]
     # synthetic+prod mixed -> INVARIANT 1 wall (see dedicated test); use
@@ -82,16 +102,17 @@ def test_filters_non_prod_source():
 
 def test_drops_unlabeled_and_null_reward():
     rows = [
-        _row(),                                   # kept
-        _row(reward=None),                        # dropped: no reward
-        _row(judge_status="unlabeled"),           # dropped: not labeled
-        _row(chosen_model_slug=None),             # dropped: no arm
+        _row(),  # kept
+        _row(reward=None),  # dropped: no reward
+        _row(judge_status="unlabeled"),  # dropped: not labeled
+        _row(chosen_model_slug=None),  # dropped: no arm
     ]
     obs = project_rows(rows)
     assert len(obs) == 1
 
 
 # ---- INVARIANT 1 ----------------------------------------------------------
+
 
 def test_invariant1_blocks_synthetic_in_prod_export():
     rows = [_row(source="prod"), _row(source="synthetic")]
@@ -106,6 +127,7 @@ def test_invariant1_bypass_with_allow_mixed():
 
 
 # ---- shape + determinism --------------------------------------------------
+
 
 def test_observation_shape_matches_refit_loader():
     obs = project_rows([_row()])
@@ -131,13 +153,14 @@ def test_ticks_are_deterministic_by_created_at():
 # ---- neutrality rider: down-weight internal-fleet, exclude only degraded ---
 # (AIN-388 P0-tail)
 
+
 def test_fleet_row_is_kept_but_downweighted():
     """An internal-fleet row (fleet_agent set) is KEPT — not dropped — and
     emitted at the down-weight, while an external row keeps full weight.
     """
     rows = [
-        _row(chosen_model_slug="m1", fleet_agent="tulkas"),   # internal fleet
-        _row(chosen_model_slug="m2", fleet_agent=None),        # external/customer
+        _row(chosen_model_slug="m1", fleet_agent="tulkas"),  # internal fleet
+        _row(chosen_model_slug="m2", fleet_agent=None),  # external/customer
     ]
     obs = project_rows(rows)
     assert len(obs) == 2, "fleet rows are kept (down-weighted), never dropped"
@@ -180,7 +203,7 @@ def test_degraded_rows_are_excluded_not_weighted():
 def test_fleet_and_degraded_combined():
     # A degraded fleet row is excluded (degraded wins over down-weight).
     rows = [
-        _row(chosen_model_slug="keep", fleet_agent="namo"),          # fleet → kept, down-weighted
+        _row(chosen_model_slug="keep", fleet_agent="namo"),  # fleet → kept, down-weighted
         _row(chosen_model_slug="drop", fleet_agent="namo", degraded=True),  # degraded → excluded
     ]
     obs = project_rows(rows)
@@ -194,11 +217,11 @@ def test_synthetic_probes_excluded_not_downweighted():
     the fleet_agent probe label for dumps predating the column. A real fleet
     agent (no probe signal) is still kept + down-weighted."""
     rows = [
-        _row(chosen_model_slug="clean"),                                       # external → full
-        _row(chosen_model_slug="p1", traffic_class="internal_probe"),          # authoritative
-        _row(chosen_model_slug="p2", fleet_agent="routed-probe"),          # fallback
+        _row(chosen_model_slug="clean"),  # external → full
+        _row(chosen_model_slug="p1", traffic_class="internal_probe"),  # authoritative
+        _row(chosen_model_slug="p2", fleet_agent="routed-probe"),  # fallback
         _row(chosen_model_slug="p3", fleet_agent="nt1-probe-1779468321"),  # fallback (ts)
-        _row(chosen_model_slug="keep", fleet_agent="tulkas"),              # real fleet → dw
+        _row(chosen_model_slug="keep", fleet_agent="tulkas"),  # real fleet → dw
     ]
     obs = project_rows(rows)
     by_model = {o["model_slug"]: o["weight"] for o in obs}
@@ -210,10 +233,16 @@ def test_synthetic_probes_excluded_not_downweighted():
 def test_internal_probe_traffic_class_wins_over_fleet_tenant():
     # A probe row that ALSO sits on the fleet tenant is still excluded (probe
     # class is stronger than the dogfood down-weight).
-    obs = project_rows([
-        _row(chosen_model_slug="probe", tenant_id=_FLEET_TENANT_IDS_DEFAULT,
-             fleet_agent="routed-probe", traffic_class="internal_probe"),
-    ])
+    obs = project_rows(
+        [
+            _row(
+                chosen_model_slug="probe",
+                tenant_id=_FLEET_TENANT_IDS_DEFAULT,
+                fleet_agent="routed-probe",
+                traffic_class="internal_probe",
+            ),
+        ]
+    )
     assert obs == []
 
 
@@ -231,16 +260,18 @@ def test_fleet_keyed_off_tenant_id_proof_matrix():
     """A/B/C/D: A(fleet, tagged) and B(fleet, fleet_agent NULL) must BOTH be
     down-weighted to the SAME weight purely on tenant_id; C(customer) full;
     D(degraded) excluded."""
-    obs = project_rows([
-        # A fleet, tagged
-        _row(chosen_model_slug="A", tenant_id=_FLEET_TENANT, fleet_agent="namo"),
-        # B fleet, NULL tag (the gap)
-        _row(chosen_model_slug="B", tenant_id=_FLEET_TENANT, fleet_agent=None),
-        # C customer
-        _row(chosen_model_slug="C", tenant_id=_CUSTOMER_TENANT, fleet_agent=None),
-        # D degraded
-        _row(chosen_model_slug="D", tenant_id=_FLEET_TENANT, traffic_origin="mlx"),
-    ])
+    obs = project_rows(
+        [
+            # A fleet, tagged
+            _row(chosen_model_slug="A", tenant_id=_FLEET_TENANT, fleet_agent="namo"),
+            # B fleet, NULL tag (the gap)
+            _row(chosen_model_slug="B", tenant_id=_FLEET_TENANT, fleet_agent=None),
+            # C customer
+            _row(chosen_model_slug="C", tenant_id=_CUSTOMER_TENANT, fleet_agent=None),
+            # D degraded
+            _row(chosen_model_slug="D", tenant_id=_FLEET_TENANT, traffic_origin="mlx"),
+        ]
+    )
     w = {o["model_slug"]: o["weight"] for o in obs}
     assert "D" not in w, "degraded fleet row excluded outright"
     assert w["A"] == fleet_downweight()
@@ -257,10 +288,12 @@ def test_fleet_tenant_id_is_case_insensitive():
 def test_fleet_tenant_env_is_additive_never_replaces(monkeypatch):
     extra = "99999999-aaaa-bbbb-cccc-dddddddddddd"
     monkeypatch.setenv("AINFERA_FLEET_TENANT_IDS", extra)
-    obs = project_rows([
-        _row(chosen_model_slug="extra", tenant_id=extra, fleet_agent=None),
-        _row(chosen_model_slug="default", tenant_id=_FLEET_TENANT, fleet_agent=None),
-    ])
+    obs = project_rows(
+        [
+            _row(chosen_model_slug="extra", tenant_id=extra, fleet_agent=None),
+            _row(chosen_model_slug="default", tenant_id=_FLEET_TENANT, fleet_agent=None),
+        ]
+    )
     w = {o["model_slug"]: o["weight"] for o in obs}
     assert w["extra"] == fleet_downweight(), "env-added tenant treated as fleet"
     assert w["default"] == fleet_downweight(), (

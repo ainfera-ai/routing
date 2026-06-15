@@ -38,10 +38,11 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
 
-def _load_module(name: str, path: Path):
+def _load_module(name: str, path: Path) -> Any:
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None, f"could not create spec for {path}"
     mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
+    assert spec.loader is not None, f"spec.loader is None for {path}"
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod

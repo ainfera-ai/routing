@@ -207,8 +207,13 @@ def test_selects_cheapest_eligible() -> None:
     arms = eligible_arms(cands, pol, q_empirical=qe)
     assert [c.model_slug for c, _ in arms] == ["mistral-large-3", "grok-4"]  # $8 < $20
     pick = select_counterfactual(
-        cands, pol, cell=REASONING_COST, q_empirical=qe,
-        kappa=Decimal("1"), cells=frozenset({REASONING_COST}), roll=0.0,
+        cands,
+        pol,
+        cell=REASONING_COST,
+        q_empirical=qe,
+        kappa=Decimal("1"),
+        cells=frozenset({REASONING_COST}),
+        roll=0.0,
     )
     assert pick is not None and pick.candidate.model_slug == "mistral-large-3"
 

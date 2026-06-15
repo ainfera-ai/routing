@@ -25,23 +25,47 @@ _SPEC.loader.exec_module(replay_gate)  # type: ignore[union-attr]
 
 # Two enrolled arms: A is cheap (clears a 0.70 floor on q_prior), B is dearer.
 _CATALOG = [
-    {"model_slug": "A", "brand_slug": "x", "q_prior": 0.80,
-     "price_in": 1.0, "price_out": 1.0, "m_allowed": True},
-    {"model_slug": "B", "brand_slug": "y", "q_prior": 0.85,
-     "price_in": 5.0, "price_out": 5.0, "m_allowed": True},
+    {
+        "model_slug": "A",
+        "brand_slug": "x",
+        "q_prior": 0.80,
+        "price_in": 1.0,
+        "price_out": 1.0,
+        "m_allowed": True,
+    },
+    {
+        "model_slug": "B",
+        "brand_slug": "y",
+        "q_prior": 0.85,
+        "price_in": 5.0,
+        "price_out": 5.0,
+        "m_allowed": True,
+    },
 ]
 _FLOORS = {"t": 0.70}
 
 
 def _agg(arm, split, oc, n, reward_sum, cell="t:band", task="t"):
-    return {"bandit_cell": cell, "task": task, "arm": arm, "split": split,
-            "outcome_class": oc, "n": n, "reward_sum": reward_sum}
+    return {
+        "bandit_cell": cell,
+        "task": task,
+        "arm": arm,
+        "split": split,
+        "outcome_class": oc,
+        "n": n,
+        "reward_sum": reward_sum,
+    }
 
 
 def _bundle(aggregates, catalog=None, floors=None):
-    return {"generated_at": "test", "source": "synthetic",
-            "catalog": catalog or _CATALOG, "floors": floors or _FLOORS,
-            "default_floor": 0.50, "aggregates": aggregates}
+    return {
+        "generated_at": "test",
+        "source": "synthetic",
+        "catalog": catalog or _CATALOG,
+        "floors": floors or _FLOORS,
+        "default_floor": 0.50,
+        "aggregates": aggregates,
+    }
 
 
 def _cell(results, name="t:band"):
@@ -53,8 +77,8 @@ def test_clean_win_passes():
     # 0.70 floor → LinUCB demotes A and picks B; B beats A on held-out by 0.50,
     # both with ≥5 holdout support → certified LINUCB_WIN → overall PASS.
     aggs = [
-        _agg("A", "train", "succeeded", 10, 4.0),    # mean 0.40 < floor
-        _agg("B", "train", "succeeded", 10, 9.0),    # mean 0.90 ≥ floor
+        _agg("A", "train", "succeeded", 10, 4.0),  # mean 0.40 < floor
+        _agg("B", "train", "succeeded", 10, 9.0),  # mean 0.90 ≥ floor
         _agg("A", "holdout", "succeeded", 10, 4.0),  # 0.40, n=10
         _agg("B", "holdout", "succeeded", 10, 9.0),  # 0.90, n=10
     ]
@@ -84,7 +108,7 @@ def test_positivity_violation_uncertifiable():
         _agg("A", "train", "succeeded", 10, 4.0),
         _agg("B", "train", "succeeded", 10, 9.0),
         _agg("A", "holdout", "succeeded", 10, 4.0),
-        _agg("B", "holdout", "succeeded", 2, 1.8),   # n=2 < 5
+        _agg("B", "holdout", "succeeded", 2, 1.8),  # n=2 < 5
     ]
     overall, results, _ = replay_gate.evaluate(_bundle(aggs))
     assert _cell(results).verdict == "UNCERTIFIABLE_POSITIVITY"
@@ -94,7 +118,7 @@ def test_positivity_violation_uncertifiable():
 def test_no_change_when_learned_mean_clears_floor():
     # A's learned mean (0.90) stays above the floor → LinUCB keeps the cheap A.
     aggs = [
-        _agg("A", "train", "succeeded", 10, 9.0),    # 0.90 ≥ floor
+        _agg("A", "train", "succeeded", 10, 9.0),  # 0.90 ≥ floor
         _agg("B", "train", "succeeded", 10, 9.5),
         _agg("A", "holdout", "succeeded", 10, 9.0),
         _agg("B", "holdout", "succeeded", 10, 9.5),
@@ -111,7 +135,7 @@ def test_coverage_collapse_when_all_demoted():
     # only survivor → decide() returns no winner → COVERAGE_COLLAPSE.
     catalog = [_CATALOG[0]]  # just A
     aggs = [
-        _agg("A", "train", "succeeded", 10, 1.0),    # 0.10 < floor 0.70
+        _agg("A", "train", "succeeded", 10, 1.0),  # 0.10 < floor 0.70
         _agg("A", "holdout", "succeeded", 10, 1.0),
     ]
     overall, results, _ = replay_gate.evaluate(_bundle(aggs, catalog=catalog))
@@ -123,7 +147,7 @@ def test_below_min_train_falls_back_to_prior():
     # A has only 3 succeeded train rows (< MIN_TRAIN) → no learned mean → A
     # keeps its q_prior (0.80, clears floor) → LinUCB == coverage (no flip).
     aggs = [
-        _agg("A", "train", "succeeded", 3, 0.0),     # mean would be 0 but n<MIN_TRAIN
+        _agg("A", "train", "succeeded", 3, 0.0),  # mean would be 0 but n<MIN_TRAIN
         _agg("B", "train", "succeeded", 10, 9.0),
         _agg("A", "holdout", "succeeded", 10, 0.0),
         _agg("B", "holdout", "succeeded", 10, 9.0),
@@ -137,8 +161,8 @@ def test_reliability_and_judge_mono_flags():
     # failed rows raise a reliability flag; ≥10 succeeded all-zero raises the
     # judge_mono_zero bias flag.
     aggs = [
-        _agg("A", "train", "succeeded", 12, 0.0),    # 12 succeeded all 0 → judge_mono
-        _agg("A", "train", "failed", 4, 0.0),        # reliability
+        _agg("A", "train", "succeeded", 12, 0.0),  # 12 succeeded all 0 → judge_mono
+        _agg("A", "train", "failed", 4, 0.0),  # reliability
         _agg("A", "holdout", "succeeded", 6, 0.0),
         _agg("B", "train", "succeeded", 10, 9.0),
         _agg("B", "holdout", "succeeded", 10, 9.0),

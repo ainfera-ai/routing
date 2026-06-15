@@ -374,7 +374,9 @@ def test_q_empirical_lifts_below_floor_model_and_wins() -> None:
     assert decide(_request(), _anchors(), pol).chosen.model_slug == "gpt-5-5"
     # with empirical override: mistral clears floor and is cheapest ($8/Mt) → wins
     d = decide(
-        _request(), _anchors(), pol,
+        _request(),
+        _anchors(),
+        pol,
         q_empirical={"mistral-large-3": Decimal("0.95")},
     )
     assert d.chosen is not None
@@ -387,7 +389,9 @@ def test_q_empirical_drops_high_prior_model_below_floor() -> None:
     pushes it below — it is dropped with BELOW_QUALITY_FLOOR."""
     pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
     d = decide(
-        _request(), _anchors(), pol,
+        _request(),
+        _anchors(),
+        pol,
         q_empirical={"claude-opus-4-7": Decimal("0.50")},
     )
     opus = next(c for c in d.candidates if c.model_slug == "claude-opus-4-7")

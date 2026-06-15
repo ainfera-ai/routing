@@ -119,9 +119,17 @@ def cmd_refit(args: argparse.Namespace) -> int:
     POLICIES_DIR.mkdir(exist_ok=True)
     (POLICIES_DIR / f"{version}.json").write_text(json.dumps(artifact, indent=2) + "\n")
     prev = None if args.no_flip_active else _set_active(version)
-    _audit({"event": "refit", "version": version, "source": args.source,
-            "n_observations": len(obs), "from": prev, "at": ts,
-            "flip_active": not args.no_flip_active})
+    _audit(
+        {
+            "event": "refit",
+            "version": version,
+            "source": args.source,
+            "n_observations": len(obs),
+            "from": prev,
+            "at": ts,
+            "flip_active": not args.no_flip_active,
+        }
+    )
     print(version)
     return 0
 
@@ -156,8 +164,15 @@ def cmd_show(_: argparse.Namespace) -> int:
         return 0
     version = json.loads(ACTIVE.read_text())["version"]
     meta = json.loads((POLICIES_DIR / f"{version}.json").read_text())
-    print(json.dumps({k: meta[k] for k in ("version", "source", "n_observations",
-                                            "ruleset_hash", "created_at")}, indent=2))
+    print(
+        json.dumps(
+            {
+                k: meta[k]
+                for k in ("version", "source", "n_observations", "ruleset_hash", "created_at")
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

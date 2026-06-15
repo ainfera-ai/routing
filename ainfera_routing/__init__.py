@@ -31,6 +31,7 @@ from ainfera_routing.learning import (
 )
 from ainfera_routing.types import (
     Candidate,
+    CandidateOutcome,
     Decision,
     DropReason,
     Policy,
@@ -39,6 +40,7 @@ from ainfera_routing.types import (
 
 __all__ = [
     "Candidate",
+    "CandidateOutcome",
     "CellModelStats",
     "CounterfactualPick",
     "Decision",

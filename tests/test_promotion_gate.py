@@ -16,8 +16,9 @@ _spec.loader.exec_module(pg)
 
 
 def _obs(cell: str, slug: str, reward: str, tick: int) -> Observation:
-    return Observation(cell=cell, model_slug=slug, reward=Decimal(reward),
-                       policy_version="v0", tick=tick)
+    return Observation(
+        cell=cell, model_slug=slug, reward=Decimal(reward), policy_version="v0", tick=tick
+    )
 
 
 def test_rehydrate_roundtrip_preserves_q():
@@ -73,9 +74,15 @@ def test_synthetic_source_never_promotes():
     cand = replay(obs)
     g = pg.evaluate_gate(inc, cand, obs, incumbent_ruleset_hash="h", candidate_ruleset_hash="h")
     row = pg.build_training_run_row(
-        g, judge_model="claude-opus-4-7", cadence="daily", source="synthetic",
-        policy_version_from="a", policy_version_to="b", outcomes_judged=len(obs),
-        exploration_floor="0.05", ruleset_hash="h",
+        g,
+        judge_model="claude-opus-4-7",
+        cadence="daily",
+        source="synthetic",
+        policy_version_from="a",
+        policy_version_to="b",
+        outcomes_judged=len(obs),
+        exploration_floor="0.05",
+        ruleset_hash="h",
     )
     assert row["promoted"] is False
     assert row["promote_reason"] == "synthetic_source_never_promotes"
@@ -87,12 +94,29 @@ def test_row_shape_matches_training_runs_columns():
     cand = replay(obs)
     g = pg.evaluate_gate(inc, cand, obs, incumbent_ruleset_hash="h", candidate_ruleset_hash="h")
     row = pg.build_training_run_row(
-        g, judge_model="claude-opus-4-7", cadence="daily", source="prod",
-        policy_version_from="a", policy_version_to="b", outcomes_judged=len(obs),
-        exploration_floor="0.05", ruleset_hash="h",
+        g,
+        judge_model="claude-opus-4-7",
+        cadence="daily",
+        source="prod",
+        policy_version_from="a",
+        policy_version_to="b",
+        outcomes_judged=len(obs),
+        exploration_floor="0.05",
+        ruleset_hash="h",
     )
-    expected = {"cadence", "judge_model", "outcomes_judged", "policy_version_from",
-                "policy_version_to", "promoted", "promote_reason", "delta_done_rate",
-                "delta_cost_usd", "replay_gate_passed", "per_cell", "exploration_floor",
-                "ruleset_hash"}
+    expected = {
+        "cadence",
+        "judge_model",
+        "outcomes_judged",
+        "policy_version_from",
+        "policy_version_to",
+        "promoted",
+        "promote_reason",
+        "delta_done_rate",
+        "delta_cost_usd",
+        "replay_gate_passed",
+        "per_cell",
+        "exploration_floor",
+        "ruleset_hash",
+    }
     assert set(row.keys()) == expected

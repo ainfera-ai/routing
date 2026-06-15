@@ -86,8 +86,10 @@ JUDGE_MONO_N = 10  # ≥ this many succeeded rows all scoring exactly 0 → bias
 # total_price_per_mtok ordering by giving equal token weights). The budget
 # gate is unused here (no cap), so token counts only need to be consistent.
 _REQ = RoutingRequest(
-    request_id="replay", agent_id="replay",
-    estimated_input_tokens=1_000_000, reserved_max_tokens=1_000_000,
+    request_id="replay",
+    agent_id="replay",
+    estimated_input_tokens=1_000_000,
+    reserved_max_tokens=1_000_000,
 )
 
 
@@ -165,9 +167,12 @@ def _arm_flags(arms: dict[str, ArmStats]) -> list[str]:
 
 
 def _classify(
-    cov: str | None, lin: str | None,
-    cov_val: Decimal | None, cov_sup: int,
-    lin_val: Decimal | None, lin_sup: int,
+    cov: str | None,
+    lin: str | None,
+    cov_val: Decimal | None,
+    cov_sup: int,
+    lin_val: Decimal | None,
+    lin_sup: int,
 ) -> tuple[str, str]:
     """The per-cell verdict + a one-line note. Pure decision table."""
     if lin is None:
@@ -175,10 +180,16 @@ def _classify(
     if cov == lin:
         return "NO_CHANGE", ""
     if cov_sup < MIN_SUPPORT or lin_sup < MIN_SUPPORT:
-        cov_s = (f"baseline {cov}={cov_val:.3f}(n={cov_sup})" if cov_val is not None
-                 and cov_sup >= MIN_SUPPORT else f"baseline {cov} UNSUPPORTED(n={cov_sup})")
-        lin_s = (f"linucb {lin}={lin_val:.3f}(n={lin_sup})" if lin_val is not None
-                 and lin_sup >= MIN_SUPPORT else f"linucb {lin} UNSUPPORTED(n={lin_sup})")
+        cov_s = (
+            f"baseline {cov}={cov_val:.3f}(n={cov_sup})"
+            if cov_val is not None and cov_sup >= MIN_SUPPORT
+            else f"baseline {cov} UNSUPPORTED(n={cov_sup})"
+        )
+        lin_s = (
+            f"linucb {lin}={lin_val:.3f}(n={lin_sup})"
+            if lin_val is not None and lin_sup >= MIN_SUPPORT
+            else f"linucb {lin} UNSUPPORTED(n={lin_sup})"
+        )
         return "UNCERTIFIABLE_POSITIVITY", f"flip but no head-to-head overlap; {cov_s}, {lin_s}"
     delta = (lin_val or Decimal("0")) - (cov_val or Decimal("0"))
     if delta >= WIN_MARGIN:
@@ -239,13 +250,19 @@ def evaluate(bundle: dict[str, Any]) -> tuple[str, list[CellResult], dict[str, i
 
         results.append(
             CellResult(
-                cell=cell, task=task, floor=str(floor),
-                coverage_pick=cov, linucb_pick=lin, flipped=flipped,
+                cell=cell,
+                task=task,
+                floor=str(floor),
+                coverage_pick=cov,
+                linucb_pick=lin,
+                flipped=flipped,
                 coverage_value=(f"{cov_val:.4f}" if cov_val is not None else None),
                 coverage_support=cov_sup,
                 linucb_value=(f"{lin_val:.4f}" if lin_val is not None else None),
                 linucb_support=lin_sup,
-                verdict=verdict, flags=flags, note=note,
+                verdict=verdict,
+                flags=flags,
+                note=note,
             )
         )
 
@@ -269,10 +286,7 @@ _FAIL_BLURB = (
     "Do not flip the wire-in. The blocking reasons + the one promising "
     "direction are below."
 )
-_HDR = (
-    "| cell | floor | coverage→ | linucb→ | flip | cov(holdout,n) | "
-    "lin(holdout,n) | verdict |"
-)
+_HDR = "| cell | floor | coverage→ | linucb→ | flip | cov(holdout,n) | lin(holdout,n) | verdict |"
 
 
 def render_markdown(
@@ -296,10 +310,16 @@ def render_markdown(
         "|---|---|---|---|---|---|---|---|",
     ]
     for r in results:
-        cov = (f"{r.coverage_value}(n={r.coverage_support})" if r.coverage_value
-               else f"—(n={r.coverage_support})")
-        lin = (f"{r.linucb_value}(n={r.linucb_support})" if r.linucb_value
-               else f"—(n={r.linucb_support})")
+        cov = (
+            f"{r.coverage_value}(n={r.coverage_support})"
+            if r.coverage_value
+            else f"—(n={r.coverage_support})"
+        )
+        lin = (
+            f"{r.linucb_value}(n={r.linucb_support})"
+            if r.linucb_value
+            else f"—(n={r.linucb_support})"
+        )
         flip = "YES" if r.flipped else "·"
         lines.append(
             f"| {r.cell} | {r.floor} | {r.coverage_pick} | {r.linucb_pick} | "
@@ -328,10 +348,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.md_out:
         Path(args.md_out).write_text(md)
     if args.json_out:
-        Path(args.json_out).write_text(json.dumps(
-            {"overall": overall, "tally": tally,
-             "cells": [r.__dict__ for r in results], "meta": meta},
-            indent=2) + "\n")
+        Path(args.json_out).write_text(
+            json.dumps(
+                {
+                    "overall": overall,
+                    "tally": tally,
+                    "cells": [r.__dict__ for r in results],
+                    "meta": meta,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
     sys.stdout.write(md)
     # exit 0 always — the verdict is the payload, not the process status (the
     # cadence reads the verdict; a non-zero would mask FAIL_CLOSED as a crash).
