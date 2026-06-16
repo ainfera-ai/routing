@@ -29,7 +29,13 @@ def test_bandit_recovers_planted_best_in_all_7_cells():
 
 def test_covers_canonical_7_task_types():
     assert set(sc.TASK_TYPES) == {
-        "reasoning", "code", "extraction", "chat", "tool_use", "embed", "general"
+        "reasoning",
+        "code",
+        "extraction",
+        "chat",
+        "tool_use",
+        "embed",
+        "general",
     }
 
 
@@ -50,13 +56,23 @@ def test_promotion_targets_shadow_only_never_prod(tmp_path, monkeypatch):
 
     obs = sc.generate_planted_observations()
     obs_file = tmp_path / "synthetic_obs.json"
-    obs_file.write_text(json.dumps([
-        {"cell": o.cell, "model_slug": o.model_slug, "reward": str(o.reward),
-         "policy_version": o.policy_version, "tick": o.tick} for o in obs
-    ]))
+    obs_file.write_text(
+        json.dumps(
+            [
+                {
+                    "cell": o.cell,
+                    "model_slug": o.model_slug,
+                    "reward": str(o.reward),
+                    "policy_version": o.policy_version,
+                    "tick": o.tick,
+                }
+                for o in obs
+            ]
+        )
+    )
     rc = refit_policy.main(["refit", "--observations", str(obs_file), "--source", "synthetic"])
     assert rc == 0
     version = json.loads((shadow / "ACTIVE.json").read_text())["version"]
     artifact = json.loads((shadow / f"{version}.json").read_text())
-    assert artifact["source"] == "synthetic"   # HARD WALL: never promotable to prod
+    assert artifact["source"] == "synthetic"  # HARD WALL: never promotable to prod
     assert shadow.exists()  # shadow slot, isolated from any prod policy store

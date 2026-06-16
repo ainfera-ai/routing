@@ -30,6 +30,7 @@ from ainfera_routing.explore import (
 REASONING_COST = "reasoning:cost"
 FLOOR = Decimal("0.88")  # api CELL_MIN_QUALITY[reasoning] (AIN-388)
 
+
 # Enrolled-5 catalog (replay-gate bundle priors).
 def _c(mid: str, slug: str, brand: str, q: str, pin: str, pout: str) -> Candidate:
     return Candidate(mid, slug, brand, Decimal(q), Decimal(pin), Decimal(pout), True)
@@ -72,20 +73,32 @@ def main() -> int:
 
     # 3. Inert (shipped defaults) — serves nothing.
     inert = select_counterfactual(
-        CATALOG, pol, cell=REASONING_COST, q_empirical=Q_EMPIRICAL,
-        kappa=Decimal("0"), cells=frozenset(), roll=0.0,
+        CATALOG,
+        pol,
+        cell=REASONING_COST,
+        q_empirical=Q_EMPIRICAL,
+        kappa=Decimal("0"),
+        cells=frozenset(),
+        roll=0.0,
     )
     print(f"3. Shipped defaults (kappa=0, cells=empty): -> {inert}  (INERT — greedy stands)\n")
 
     # 4. Armed (what a founder-gated κ>0 would do).
     armed = select_counterfactual(
-        CATALOG, pol, cell=REASONING_COST, q_empirical=Q_EMPIRICAL,
-        kappa=Decimal("0.10"), cells=frozenset({REASONING_COST}), roll=0.05,
+        CATALOG,
+        pol,
+        cell=REASONING_COST,
+        q_empirical=Q_EMPIRICAL,
+        kappa=Decimal("0.10"),
+        cells=frozenset({REASONING_COST}),
+        roll=0.05,
     )
     assert armed is not None
     print("4. ARMED (κ=0.10, cells={reasoning:cost}, roll=0.05 — illustrative, NOT enabled):")
-    print(f"   select_counterfactual → serve {armed.candidate.model_slug!r} "
-          f"(decision_rule={DECISION_RULE!r}, exploration=True)")
+    print(
+        f"   select_counterfactual → serve {armed.candidate.model_slug!r} "
+        f"(decision_rule={DECISION_RULE!r}, exploration=True)"
+    )
     print()
 
     armed_slug = armed.candidate.model_slug
