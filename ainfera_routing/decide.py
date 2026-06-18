@@ -50,14 +50,37 @@ _RULESET_PAYLOAD = {
 }
 
 
+# AIN-446 diversity soft-penalty (default OFF). When the caller supplies a
+# per-maker order-price penalty (`maker_penalty`), the survivor ORDERING (step
+# 4) ranks on a diversity-adjusted effective price; gates / floor / budget and
+# the reported projected costs are unchanged. Folded into the ruleset payload
+# ONLY when active, so audit rows written under the diversity rule are
+# distinguishable and replay stays exact — with no penalty the hash is
+# byte-identical to v0.
+_DIVERSITY_RULE = {
+    "diversity": {
+        "mechanism": "maker_share_soft_penalty",
+        "applies_to": "ordering_only",
+    }
+}
+
+
+def _ruleset_hash(*, diversity_active: bool) -> str:
+    payload = {**_RULESET_PAYLOAD, **_DIVERSITY_RULE} if diversity_active else _RULESET_PAYLOAD
+    blob = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()[:8]
+
+
 def ruleset_hash() -> str:
-    """8-char sha256 digest of the canonical-JSON ruleset payload.
+    """8-char sha256 digest of the canonical-JSON ruleset payload (the v0 /
+    diversity-inactive shape).
 
     Bumps automatically whenever _RULESET_PAYLOAD changes — so any audit row
-    written under a different rule shape is trivially distinguishable.
+    written under a different rule shape is trivially distinguishable. When the
+    diversity soft-penalty is active for a given decision, `decide` stamps the
+    extended (diversity) shape instead; see `_ruleset_hash`.
     """
-    blob = json.dumps(_RULESET_PAYLOAD, separators=(",", ":"), sort_keys=True).encode()
-    return hashlib.sha256(blob).hexdigest()[:8]
+    return _ruleset_hash(diversity_active=False)
 
 
 # ── cost projection ──────────────────────────────────────────────────────
@@ -109,6 +132,30 @@ def _effective_q(
     return candidate.q_prior
 
 
+# ── diversity soft-penalty (AIN-446 · ordering only) ─────────────────────
+
+
+def _order_price(
+    candidate: Candidate,
+    maker_penalty: Mapping[str, Decimal] | None,
+) -> Decimal:
+    """Cheapness key for step 4 — the real combined price scaled up by the
+    candidate maker's diversity penalty: ``price * (1 + penalty)``.
+
+    The penalty is a non-negative fractional markup keyed by ``brand_slug``
+    (the maker), supplied by the caller from the rolling per-maker share vs the
+    ≤25% diversity target (AIN-446). Keeping the share→penalty curve in the
+    caller leaves ``decide`` pure. The markup affects ORDERING ONLY — the
+    budget gate and the reported ``projected_cost_usd`` always use the real
+    price, so a diversity nudge can never relax a real budget. ``None`` /
+    absent maker / non-positive penalty → real price unchanged (inert)."""
+    if maker_penalty is not None:
+        p = maker_penalty.get(candidate.brand_slug)
+        if p is not None and p > 0:
+            return candidate.total_price_per_mtok() * (Decimal("1") + p)
+    return candidate.total_price_per_mtok()
+
+
 # ── the decision ─────────────────────────────────────────────────────────
 
 
@@ -118,6 +165,7 @@ def decide(
     policy: Policy,
     *,
     q_empirical: Mapping[str, Decimal] | None = None,
+    maker_penalty: Mapping[str, Decimal] | None = None,
 ) -> Decision:
     """Quality-floor-then-min-cost over an N-candidate set.
 
@@ -128,9 +176,20 @@ def decide(
     map is passed in by the caller (RNG-free, DB-free) so ``decide`` stays a
     pure, deterministic function; exploration (the ≥5% floor) is applied by
     the caller, not here.
+
+    ``maker_penalty`` (AIN-446 diversity soft-penalty, default OFF): optional
+    ``brand_slug -> non-negative markup`` map. When supplied, the cheapest-
+    survivor ORDERING ranks on a diversity-adjusted effective price
+    (``price * (1 + penalty)``) so an over-represented maker is gently
+    down-ranked toward the ≤25%-per-maker target. Gates, floor, budget and the
+    reported ``projected_cost_usd`` always use the REAL price — the nudge never
+    relaxes a budget. ``None`` / empty / all-zero → byte-identical to v0
+    (same winner AND same ``ruleset_hash``); the hash only bumps to the
+    diversity shape when a positive penalty is actually in force.
     """
 
-    h = ruleset_hash()
+    diversity_active = maker_penalty is not None and any(v > 0 for v in maker_penalty.values())
+    h = _ruleset_hash(diversity_active=diversity_active)
 
     if not candidates:
         return Decision(
@@ -274,14 +333,16 @@ def decide(
         )
 
     # 4. Pick — cheapest survivor wins.
-    # Sort key is fully deterministic: (combined_price, -q_prior, model_slug).
+    # Sort key is fully deterministic: (effective_price, -q_prior, model_slug).
     # The model_slug tiebreak guarantees no platform-dependent ordering
     # when price *and* q_prior tie (rare but possible at v0; goes from
     # rare to impossible once empirical priors land in v1).
+    # `effective_price` = real combined price * (1 + maker diversity penalty);
+    # with no penalty it IS the real combined price → v0 ordering unchanged.
     ranked = sorted(
         survivors,
         key=lambda c: (
-            c.total_price_per_mtok(),
+            _order_price(c, maker_penalty),
             -(_effective_q(c, q_empirical) or Decimal("0")),
             c.model_slug,
         ),

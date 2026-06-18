@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 
 from ainfera_routing import Candidate, Policy, RoutingRequest, decide
-from ainfera_routing.decide import ruleset_hash
+from ainfera_routing.decide import project_cost_usd, ruleset_hash
 from ainfera_routing.types import DropReason
 
 # ── §C anchor fixture: the 5 frontier models with seeded q_prior ─────────
@@ -406,3 +406,72 @@ def test_q_empirical_override_is_deterministic() -> None:
     pol = Policy(min_quality=Decimal("0.88"), policy_name="balanced")
     qe = {"grok-4": Decimal("0.99"), "mistral-large-3": Decimal("0.40")}
     assert decide(req, cands, pol, q_empirical=qe) == decide(req, cands, pol, q_empirical=qe)
+
+
+# ── AIN-446 diversity soft-penalty (ordering-only, default OFF) ───────────
+
+
+def test_diversity_inert_when_unset_or_zero_is_byte_identical() -> None:
+    """No penalty / empty map / all-zero → byte-identical Decision AND the v0
+    ruleset_hash (the diversity rule must leave audit/replay untouched off)."""
+    req, cands = _request(), _anchors()
+    pol = Policy(min_quality=Decimal("0.80"), policy_name="balanced")
+    base = decide(req, cands, pol)
+    assert decide(req, cands, pol, maker_penalty=None) == base
+    assert decide(req, cands, pol, maker_penalty={}) == base
+    assert decide(req, cands, pol, maker_penalty={"openai": Decimal("0")}) == base
+    assert base.ruleset_hash == ruleset_hash()
+
+
+def test_diversity_penalty_reorders_winner_on_effective_price() -> None:
+    """min_quality=0.80 → mistral ($8) is the v0 winner. A 0.5 markup on the
+    mistral maker makes its effective price $12 > gemini's $11.25 → gemini wins.
+    The reported cost stays the REAL gemini cost, and the ruleset_hash bumps."""
+    req, cands = _request(), _anchors()
+    pol = Policy(min_quality=Decimal("0.80"), policy_name="balanced")
+    assert decide(req, cands, pol).chosen.model_slug == "mistral-large-3"  # type: ignore[union-attr]
+
+    d = decide(req, cands, pol, maker_penalty={"mistral": Decimal("0.5")})
+    assert d.chosen is not None
+    assert d.chosen.model_slug == "gemini-3-1-pro"
+    # reported cost is the real (un-penalised) projected cost for the winner
+    real = project_cost_usd(
+        candidate=next(c for c in cands if c.model_slug == "gemini-3-1-pro"),
+        estimated_input_tokens=req.estimated_input_tokens,
+        reserved_max_tokens=req.reserved_max_tokens,
+    )
+    assert d.chosen.projected_cost_usd == real
+    # audit row is distinguishable from a v0 row
+    assert d.ruleset_hash != ruleset_hash()
+
+
+def test_diversity_active_hash_bumps_even_when_winner_unchanged() -> None:
+    """A small penalty that doesn't flip the winner still stamps the diversity
+    ruleset_hash — the rule was in force, so the audit row must say so."""
+    req, cands = _request(), _anchors()
+    pol = Policy(min_quality=Decimal("0.80"), policy_name="balanced")
+    d = decide(req, cands, pol, maker_penalty={"mistral": Decimal("0.1")})
+    assert d.chosen is not None and d.chosen.model_slug == "mistral-large-3"  # 8*1.1=8.8 < 11.25
+    assert d.ruleset_hash != ruleset_hash()
+
+
+def test_diversity_never_relaxes_budget() -> None:
+    """A penalty reorders survivors only — it can never resurrect a candidate
+    dropped by the real budget gate. With a cap that leaves only mistral, even a
+    huge mistral penalty keeps mistral the winner (nothing else cleared budget)."""
+    req, cands = _request(), _anchors()
+    pol = Policy(
+        min_quality=Decimal("0.80"),
+        budget_cap_usd=Decimal("0.009"),  # only mistral's projected cost clears
+        policy_name="balanced",
+    )
+    d = decide(req, cands, pol, maker_penalty={"mistral": Decimal("9")})
+    assert d.chosen is not None and d.chosen.model_slug == "mistral-large-3"
+
+
+def test_diversity_penalty_is_deterministic() -> None:
+    """Same inputs incl. maker_penalty → byte-identical Decision across runs."""
+    req, cands = _request(), _anchors()
+    pol = Policy(min_quality=Decimal("0.80"), policy_name="balanced")
+    mp = {"mistral": Decimal("0.5"), "openai": Decimal("0.2")}
+    assert decide(req, cands, pol, maker_penalty=mp) == decide(req, cands, pol, maker_penalty=mp)
