@@ -24,6 +24,7 @@ class DropReason(StrEnum):
     M_ALLOWED_VETO = "m_allowed_veto"
     BELOW_QUALITY_FLOOR = "below_quality_floor"
     EXCEEDS_BUDGET_CAP = "exceeds_budget_cap"
+    EXCEEDS_LATENCY_CAP = "exceeds_latency_cap"
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,11 @@ class Candidate:
     price_in_per_mtok_usd: Decimal
     price_out_per_mtok_usd: Decimal
     m_allowed: bool | None = None  # None == no verdict == gated out
+    # AIN-542 selection layer: expected p95 latency (ms) for this model on this
+    # request, supplied by the caller from the catalog AA metrics (ttft + output
+    # tokens / tps). None = unknown → never dropped for latency (conservative).
+    # Acted on only when the preset carries a latency_cap_ms.
+    expected_latency_ms: int | None = None
 
     def total_price_per_mtok(self) -> Decimal:
         """Combined in+out price as the cheapness ordering key.
@@ -65,8 +71,11 @@ class Policy:
 
     min_quality: Decimal  # 0-1 quality floor on q_prior
     budget_cap_usd: Decimal | None = None  # per-call projected cost cap; None = unlimited
-    # C1 caveat: no latency data exists in v0 catalog. Field carried so the
-    # signature is forward-compatible; the brain does not act on it today.
+    # AIN-542 selection layer (the deferred C1, now wired): per-preset latency
+    # SLO in ms. When set, the brain drops survivors whose
+    # Candidate.expected_latency_ms exceeds it — so a cheap-but-slow model can't
+    # win on price alone (D6: a 41 s model on a latency-sensitive preset).
+    # None = no SLO = inert = byte-identical to v0.
     latency_cap_ms: int | None = None
     policy_name: str = "default"
 

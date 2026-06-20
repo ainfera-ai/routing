@@ -64,9 +64,24 @@ _DIVERSITY_RULE = {
     }
 }
 
+# AIN-542 selection layer (default OFF). When the preset carries a latency_cap_ms
+# the brain drops survivors slower than the SLO (step 3b). Folded into the ruleset
+# payload ONLY when active, so audit rows under the latency rule are distinguishable
+# and replay stays exact — with no SLO the hash is byte-identical to v0.
+_LATENCY_RULE = {
+    "latency": {
+        "mechanism": "preset_p95_latency_slo",
+        "applies_to": "drop_above_latency_cap",
+    }
+}
 
-def _ruleset_hash(*, diversity_active: bool) -> str:
-    payload = {**_RULESET_PAYLOAD, **_DIVERSITY_RULE} if diversity_active else _RULESET_PAYLOAD
+
+def _ruleset_hash(*, diversity_active: bool, latency_active: bool = False) -> str:
+    payload: dict[str, object] = dict(_RULESET_PAYLOAD)
+    if diversity_active:
+        payload.update(_DIVERSITY_RULE)
+    if latency_active:
+        payload.update(_LATENCY_RULE)
     blob = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()[:8]
 
@@ -80,7 +95,7 @@ def ruleset_hash() -> str:
     diversity soft-penalty is active for a given decision, `decide` stamps the
     extended (diversity) shape instead; see `_ruleset_hash`.
     """
-    return _ruleset_hash(diversity_active=False)
+    return _ruleset_hash(diversity_active=False, latency_active=False)
 
 
 # ── cost projection ──────────────────────────────────────────────────────
@@ -189,7 +204,8 @@ def decide(
     """
 
     diversity_active = maker_penalty is not None and any(v > 0 for v in maker_penalty.values())
-    h = _ruleset_hash(diversity_active=diversity_active)
+    latency_active = policy.latency_cap_ms is not None
+    h = _ruleset_hash(diversity_active=diversity_active, latency_active=latency_active)
 
     if not candidates:
         return Decision(
@@ -307,6 +323,30 @@ def decide(
             )
             continue
 
+        # 3b. Latency SLO (AIN-542 selection layer; default OFF). When the preset
+        # carries a latency_cap_ms AND this candidate has a known expected latency,
+        # drop survivors slower than the SLO — so a cheap-but-slow model can't win
+        # on price alone (D6). latency_cap_ms None → inert (v0); unknown latency → kept.
+        if (
+            policy.latency_cap_ms is not None
+            and c.expected_latency_ms is not None
+            and c.expected_latency_ms > policy.latency_cap_ms
+        ):
+            outcomes.append(
+                CandidateOutcome(
+                    model_id=c.model_id,
+                    model_slug=c.model_slug,
+                    brand_slug=c.brand_slug,
+                    q_prior=c.q_prior,
+                    price_in_per_mtok_usd=c.price_in_per_mtok_usd,
+                    price_out_per_mtok_usd=c.price_out_per_mtok_usd,
+                    m_allowed=c.m_allowed,
+                    projected_cost_usd=projected,
+                    drop_reason=DropReason.EXCEEDS_LATENCY_CAP,
+                )
+            )
+            continue
+
         survivors.append(c)
 
     if not survivors:
@@ -316,7 +356,12 @@ def decide(
         # only failures get a separate rule_fired so the audit shows the
         # cause precisely.
         any_enrolled_made_it_to_floor = any(
-            o.drop_reason in (DropReason.BELOW_QUALITY_FLOOR, DropReason.EXCEEDS_BUDGET_CAP)
+            o.drop_reason
+            in (
+                DropReason.BELOW_QUALITY_FLOOR,
+                DropReason.EXCEEDS_BUDGET_CAP,
+                DropReason.EXCEEDS_LATENCY_CAP,
+            )
             for o in outcomes
         )
         return Decision(
