@@ -86,6 +86,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal, getcontext
 from typing import Any
 
+from ainfera_routing.exploration_thompson import seed_for_cell, thompson_weights
+
 # Lock decimal precision so a replay across hosts gives byte-identical
 # state. 28 is the Python default but pinning here protects against an
 # operator who sets it elsewhere.
@@ -269,21 +271,58 @@ class LinUCBConsumer:
                 out[slug] = stats.mean()
         return out
 
-    def exploration_quota(self, cell: str, candidate_slugs: list[str]) -> dict[str, Decimal]:
-        """Per-model selection-probability lower bound for the brain to honor.
+    def exploration_quota(
+        self,
+        cell: str,
+        candidate_slugs: list[str],
+        *,
+        thompson: bool = False,
+        thompson_min_samples: int = 30,
+        thompson_draws: int = 500,
+    ) -> dict[str, Decimal]:
+        """Per-model exploration weights for the brain's ε-floor draw.
 
-        Splits `self.exploration_floor` across the least-explored arms
-        in the cell. If `floor == 0.10` and three arms are tied at the
-        minimum count, each gets `0.10 / 3` reserved. The remainder
-        `(1 - floor)` flows to whatever selection rule the brain uses.
+        Default (v0): splits `self.exploration_floor` across the least-explored
+        arms in the cell — a count-based floor. The remainder `(1 - floor)` flows
+        to whatever selection rule the brain uses.
 
-        Returns floors keyed by every candidate_slug — slugs not in the
-        floor get `Decimal('0')` so the caller can sum the dict and
-        verify the budget.
+        AIN-542 (`thompson=True`, founder-gated): weights are instead the posterior
+        P[arm is best] over each arm's live Beta posterior (`alpha=b, beta=A-b`), with a
+        min-sample floor so an under-sampled arm is never starved below the
+        exploration floor. This makes ε-exploration prefer the arms most likely to
+        be better instead of the merely-least-sampled. The caller feeds these to
+        BOTH the exploration draw and the propensity μ, so importance weights stay
+        unbiased either way.
+
+        Returns weights keyed by every candidate_slug — slugs not weighted get
+        `Decimal('0')` so the caller can sum the dict and verify the budget.
         """
         if not candidate_slugs:
             return {}
         bucket = self.state.get(cell, {})
+
+        if thompson:
+            arms = [
+                (
+                    slug,
+                    float(bucket.get(slug, CellModelStats()).b),
+                    float(bucket.get(slug, CellModelStats()).A),
+                    bucket.get(slug, CellModelStats()).n,
+                )
+                for slug in candidate_slugs
+            ]
+            weights = thompson_weights(
+                arms,
+                min_samples=thompson_min_samples,
+                floor_pct=float(self.exploration_floor),
+                draws=thompson_draws,
+                seed=seed_for_cell(cell),
+            )
+            # 9 dp keeps the dict scale-stable; the sampler + propensity renormalise.
+            return {
+                slug: Decimal(str(round(weights.get(slug, 0.0), 9))) for slug in candidate_slugs
+            }
+
         counts = {slug: bucket.get(slug, CellModelStats()).n for slug in candidate_slugs}
         # Least-explored = smallest n. With a hard floor of 0, no
         # exploration is enforced.
