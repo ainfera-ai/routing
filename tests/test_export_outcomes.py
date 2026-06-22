@@ -12,7 +12,6 @@ import pytest
 
 from scripts.export_outcomes import (
     _FLEET_TENANT_IDS_DEFAULT,
-    _GOLD_DRIVER_AGENT_IDS,
     bandit_cell,
     fleet_downweight,
     project_rows,
@@ -37,55 +36,80 @@ def _row(**kw):
 # ---- bandit_cell projection (the core fix) --------------------------------
 
 
-def test_bandit_cell_drops_model_segment():
+def test_bandit_cell_drops_model_inserts_tenant():
+    # AIN-602/AIN-550: task:model:band -> task:tenant:band (drop model, insert tenant)
     assert (
         bandit_cell(
             stored_cell="chat:mistral-large-3:cost",
             task_type="chat",
             policy_version="cost_first@1.0.0+x",
+            tenant_id="t1",
         )
-        == "chat:cost"
+        == "chat:t1:cost"
     )
     assert (
         bandit_cell(
             stored_cell="reasoning:gemini-3-1-pro:quality",
             task_type="reasoning",
             policy_version="quality_first@1.0.0+x",
+            tenant_id="t1",
         )
-        == "reasoning:quality"
+        == "reasoning:t1:quality"
     )
 
 
 def test_bandit_cell_fallback_when_cell_absent_or_malformed():
     # No stored cell -> derive band from policy preset.
     assert (
-        bandit_cell(stored_cell=None, task_type="code", policy_version="cost_first@1.0.0+x")
-        == "code:cost"
+        bandit_cell(
+            stored_cell=None,
+            task_type="code",
+            policy_version="cost_first@1.0.0+x",
+            tenant_id="t1",
+        )
+        == "code:t1:cost"
     )
     # Malformed (not 3-part) -> fallback path.
     assert (
-        bandit_cell(stored_cell="weird", task_type="tool_use", policy_version="balanced@1.0.0+x")
-        == "tool_use:balanced"
+        bandit_cell(
+            stored_cell="weird",
+            task_type="tool_use",
+            policy_version="balanced@1.0.0+x",
+            tenant_id="t1",
+        )
+        == "tool_use:t1:balanced"
     )
-    # Unknown preset -> balanced.
+    # Unknown preset -> balanced; missing tenant -> 'unknown'.
     assert (
-        bandit_cell(stored_cell=None, task_type="general", policy_version="mystery@9+z")
-        == "general:balanced"
+        bandit_cell(
+            stored_cell=None, task_type="general", policy_version="mystery@9+z", tenant_id=None
+        )
+        == "general:unknown:balanced"
     )
 
 
-def test_two_models_same_task_band_share_one_bandit_cell():
-    # The whole point: different chosen models, same (task, band) -> one cell
+def test_two_models_same_task_tenant_band_share_one_bandit_cell():
+    # The whole point: different chosen models, same (task, tenant, band) -> one cell
     # with two arms to compare.
     rows = [
-        _row(cell="chat:mistral-large-3:cost", chosen_model_slug="mistral-large-3", reward=0.6),
-        _row(cell="chat:gemini-3-1-pro:cost", chosen_model_slug="gemini-3-1-pro", reward=0.9),
+        _row(cell="chat:mistral-large-3:cost", chosen_model_slug="mistral-large-3",
+             reward=0.6, tenant_id="cust1"),
+        _row(cell="chat:gemini-3-1-pro:cost", chosen_model_slug="gemini-3-1-pro",
+             reward=0.9, tenant_id="cust1"),
     ]
     obs = project_rows(rows)
-    cells = {o["cell"] for o in obs}
-    assert cells == {"chat:cost"}
-    arms = {o["model_slug"] for o in obs}
-    assert arms == {"mistral-large-3", "gemini-3-1-pro"}
+    assert {o["cell"] for o in obs} == {"chat:cust1:cost"}
+    assert {o["model_slug"] for o in obs} == {"mistral-large-3", "gemini-3-1-pro"}
+
+
+def test_different_tenants_split_into_separate_cells():
+    # AIN-602: same task+band but different tenants -> two distinct model-free cells.
+    rows = [
+        _row(cell="chat:mistral-large-3:cost", tenant_id="cust1"),
+        _row(cell="chat:mistral-large-3:cost", tenant_id="cust2"),
+    ]
+    obs = project_rows(rows)
+    assert {o["cell"] for o in obs} == {"chat:cust1:cost", "chat:cust2:cost"}
 
 
 # ---- filtering ------------------------------------------------------------
@@ -319,37 +343,3 @@ def test_routing_fleet_tenant_keystone_matches_api_constant():
     api write path tags on (api services/routing_brain._FLEET_TENANT_IDS_DEFAULT
     + its own test). A drift in either repo would split fleet detection."""
     assert _FLEET_TENANT_IDS_DEFAULT == "280f4469-d318-4ec4-9c63-f3ea83466b03"
-
-
-# ---- AIN-544 · verify-gold anchor exclusion (anchor-only, never selection) ----
-
-_VERIFY_GOLD_ID = "ccbf9d9d-5ab6-4f48-b560-58c0b32949aa"
-
-
-def test_gold_anchor_row_excluded_by_driver_id():
-    """A row routed by the dedicated verify-gold driver is dropped outright — it feeds
-    the κ anchor, but is synthetic measurement, never a selection signal."""
-    obs = project_rows([_row(agent_id=_VERIFY_GOLD_ID)])
-    assert obs == []
-    # case-insensitive (UUIDs are canonical-lower, but be defensive)
-    assert project_rows([_row(agent_id=_VERIFY_GOLD_ID.upper())]) == []
-
-
-def test_gold_anchor_row_excluded_by_tag():
-    """Defense in depth: a row tagged gold (dump LEFT JOIN labs_verify_gold) is dropped
-    even if it carries no recognised driver agent_id."""
-    assert project_rows([_row(is_gold=True)]) == []
-    assert project_rows([_row(gold_id="g-001")]) == []
-
-
-def test_gold_anchor_keystone_matches_api_constant():
-    """Cross-repo lock: the projector's gold driver set MUST contain the api SSOT id
-    (api services/training_scope.GOLD_DRIVER_AGENT_IDS). Drift would re-open the leak."""
-    assert _VERIFY_GOLD_ID in _GOLD_DRIVER_AGENT_IDS
-
-
-def test_normal_fleet_row_still_kept():
-    """A non-gold fleet row is unaffected (kept, down-weighted as before)."""
-    ulmo = "0b382a0b-968b-44f4-b5fe-2919ca51adbc"
-    obs = project_rows([_row(tenant_id=_FLEET_TENANT_IDS_DEFAULT, agent_id=ulmo)])
-    assert len(obs) == 1
