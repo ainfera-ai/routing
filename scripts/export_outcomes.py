@@ -10,8 +10,9 @@ that refit_policy.py consumes.
 routing_outcomes.cell stores the section-16 COVERAGE cell
 "{task_type}:{model_slug}:{constraint_band}" - model baked in, correct for
 the coverage dashboard. The LinUCB learner compares MODELS WITHIN a cell,
-so it needs a model-free BANDIT-CONTEXT cell "{task_type}:{constraint_band}"
-with the chosen model as the ARM.
+so it needs a model-free BANDIT-CONTEXT cell
+"{task_type}:{tenant_id}:{constraint_band}" (AIN-602/AIN-550 canonical) with
+the chosen model as the ARM.
 
 This projector performs exactly that drop. It is the production-data
 analogue of what synthetic_coldstart.py already does when it mints
@@ -75,16 +76,6 @@ from typing import Any
 # exclude (use the degraded path for exclusion, not a zero weight).
 _FLEET_DOWNWEIGHT_ENV = "AINFERA_FLEET_DOWNWEIGHT"
 _FLEET_DOWNWEIGHT_DEFAULT = 0.25
-
-# AIN-544 · the dedicated verify-gold anchor driver(s) — EXCLUDE outright (never a
-# selection signal). The gold corpus routes as traffic_class=fleet so it feeds the κ
-# ANCHOR (verify-reward), but it is synthetic measurement, not organic demand — so it
-# must never train the moat, even at the dogfood down-weight (same rationale as the
-# synthetic probes). Cross-repo twin of api services/training_scope.GOLD_DRIVER_AGENT_IDS
-# (a new driver is added in BOTH). The dump SELECT should carry `agent_id` (and may carry
-# an `is_gold` flag) for the structural path to fire; the api v_measurement_outcomes view
-# is the DB-side guard for the dashboards regardless.
-_GOLD_DRIVER_AGENT_IDS = frozenset({"ccbf9d9d-5ab6-4f48-b560-58c0b32949aa"})
 
 
 def fleet_downweight() -> float:
@@ -171,20 +162,27 @@ def _band_from_policy_version(policy_version: str | None) -> str:
 
 
 def bandit_cell(
-    *, stored_cell: str | None, task_type: str | None, policy_version: str | None
+    *,
+    stored_cell: str | None,
+    task_type: str | None,
+    policy_version: str | None,
+    tenant_id: str | None,
 ) -> str:
     """Project the section-16 coverage cell down to the model-free bandit cell.
 
-    Primary path: stored cell `task:model:band` -> `task:band` (drop the
-    middle model segment). Defensive fallback when the stored cell is
-    missing or not 3-part: `{task_type}:{band-from-policy}`.
-    """
+    AIN-602/AIN-550 canonical cell = ``{task_type}:{tenant_id}:{constraint_band}`` (the MODEL
+    is the arm, the TENANT is part of the context). Primary path: stored cell
+    ``task:model:band`` -> ``task:tenant:band`` (drop the middle MODEL segment, insert the
+    tenant). Defensive fallback when the stored cell is missing or not 3-part:
+    ``{task_type}:{tenant}:{band-from-policy}``. MUST stay byte-identical to the api consumer
+    (``policy_artifact.bandit_cell``) + the refit (``labs.labeled_corpus.model_free_cell``)."""
+    tid = str(tenant_id) if tenant_id else "unknown"
     if stored_cell:
         parts = stored_cell.split(":")
         if len(parts) == 3:
-            return f"{parts[0]}:{parts[2]}"
+            return f"{parts[0]}:{tid}:{parts[2]}"
     tt = task_type or "general"
-    return f"{tt}:{_band_from_policy_version(policy_version)}"
+    return f"{tt}:{tid}:{_band_from_policy_version(policy_version)}"
 
 
 def _is_degraded(row: dict[str, Any]) -> bool:
@@ -223,22 +221,6 @@ def _is_synthetic_probe(row: dict[str, Any]) -> bool:
         return True
     fa = str(row.get("fleet_agent") or "").lower()
     return fa == "routed-probe" or fa.startswith("nt1-probe") or fa.endswith("-probe")
-
-
-def _is_gold_anchor(row: dict[str, Any]) -> bool:
-    """True iff a row is from the verify-gold anchor corpus (EXCLUDE outright).
-
-    AIN-544: the gold corpus routes as fleet (so verify-reward scores it and it feeds
-    the κ anchor), but it is synthetic measurement — not a real task outcome — so it must
-    never train the moat, even at the dogfood down-weight. Twin of api
-    services/training_scope.is_selection_excluded. Defense in depth — excluded by EITHER
-    the dedicated driver id (``agent_id``) OR a per-row gold tag (``is_gold`` / ``gold_id``,
-    set when the dump LEFT JOINs labs_verify_gold). Falsy on dumps that carry neither, so
-    the api-side v_measurement_outcomes view remains the authoritative dashboard guard.
-    """
-    if str(row.get("agent_id") or "").lower() in _GOLD_DRIVER_AGENT_IDS:
-        return True
-    return bool(row.get("is_gold")) or bool(row.get("gold_id"))
 
 
 def project_rows(
@@ -284,11 +266,6 @@ def project_rows(
             # (not down-weighted) — they are not real task outcomes. The
             # 0.25 dogfood down-weight is reserved for real internal work.
             continue
-        if _is_gold_anchor(r):
-            # AIN-544: verify-gold anchor corpus — routed as fleet so it feeds the
-            # κ anchor, but synthetic measurement, never a selection signal. Excluded
-            # outright (same class as synthetic probes), not down-weighted.
-            continue
         kept.append(r)
 
     if not allow_mixed and (seen_sources & {"synthetic"}) and (seen_sources - {source}):
@@ -307,6 +284,7 @@ def project_rows(
                     stored_cell=r.get("cell"),
                     task_type=r.get("task_type"),
                     policy_version=r.get("policy_version"),
+                    tenant_id=r.get("tenant_id"),
                 ),
                 "model_slug": r["chosen_model_slug"],
                 "reward": float(r["reward"]),
