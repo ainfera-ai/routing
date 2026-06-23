@@ -395,8 +395,11 @@ def test_floor_on_q_prior_does_not_lift_below_floor_model() -> None:
     even with q_empirical=0.95 — the floor reads q_prior, not q̂. gpt-5-5 still wins."""
     pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
     d = decide(
-        _request(), _anchors(), pol,
-        q_empirical={"mistral-large-3": Decimal("0.95")}, floor_on_q_prior=True,
+        _request(),
+        _anchors(),
+        pol,
+        q_empirical={"mistral-large-3": Decimal("0.95")},
+        floor_on_q_prior=True,
     )
     mistral = next(c for c in d.candidates if c.model_slug == "mistral-large-3")
     assert mistral.drop_reason is DropReason.BELOW_QUALITY_FLOOR  # q_prior 0.80 < 0.91; not lifted
@@ -410,8 +413,11 @@ def test_floor_on_q_prior_does_not_drop_high_prior_model() -> None:
     cheapest."""
     pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
     d = decide(
-        _request(), _anchors(), pol,
-        q_empirical={"claude-opus-4-7": Decimal("0.50")}, floor_on_q_prior=True,
+        _request(),
+        _anchors(),
+        pol,
+        q_empirical={"claude-opus-4-7": Decimal("0.50")},
+        floor_on_q_prior=True,
     )
     opus = next(c for c in d.candidates if c.model_slug == "claude-opus-4-7")
     assert opus.drop_reason is None  # q_prior 0.95 ≥ 0.91 ⇒ clears; cost-aware q̂ does not drop it

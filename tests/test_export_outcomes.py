@@ -92,10 +92,18 @@ def test_two_models_same_task_tenant_band_share_one_bandit_cell():
     # The whole point: different chosen models, same (task, tenant, band) -> one cell
     # with two arms to compare.
     rows = [
-        _row(cell="chat:mistral-large-3:cost", chosen_model_slug="mistral-large-3",
-             reward=0.6, tenant_id="cust1"),
-        _row(cell="chat:gemini-3-1-pro:cost", chosen_model_slug="gemini-3-1-pro",
-             reward=0.9, tenant_id="cust1"),
+        _row(
+            cell="chat:mistral-large-3:cost",
+            chosen_model_slug="mistral-large-3",
+            reward=0.6,
+            tenant_id="cust1",
+        ),
+        _row(
+            cell="chat:gemini-3-1-pro:cost",
+            chosen_model_slug="gemini-3-1-pro",
+            reward=0.9,
+            tenant_id="cust1",
+        ),
     ]
     obs = project_rows(rows)
     assert {o["cell"] for o in obs} == {"chat:cust1:cost"}
