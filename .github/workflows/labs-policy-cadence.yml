@@ -1,0 +1,85 @@
+name: labs-policy-cadence
+
+# AIN-335 / AIN-550 · nightly LinUCB policy CANDIDATE + gate validation.
+#
+# WHAT THIS DOES: dump routing_outcomes (read-only) -> export_outcomes (model-free
+# task:tenant:band cells) -> refit_policy -> promotion_gate, then UPLOADS the candidate
+# artifact + summary for inspection. It is a DRY-RUN: it never flips ACTIVE and never
+# touches the serving fleet (a GitHub runner cannot write /var/ainfera/policies).
+#
+# WHAT THIS DOES NOT DO: publish to serving. Promotion to the live ACTIVE.json is the
+# Spark cron path `scripts/training_cadence.sh --apply-promote` (writes the serving FS),
+# founder-gated. Use this workflow to catch refit/gate regressions nightly and to eyeball
+# the candidate (cells, q_empirical, Thompson weights) before any live promotion.
+#
+# REQUIRED SECRET: DATABASE_URL — a (ideally read-only/replica) Postgres URL. The Doppler
+# SQLAlchemy form `postgresql+asyncpg://...?ssl` is normalised to a psql DSN below.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "routing_outcomes lookback window (days)"
+        default: "30"
+  schedule:
+    - cron: "30 20 * * *" # 03:30 WIB, after the nightly judge sweep
+
+permissions:
+  contents: read
+
+concurrency:
+  group: labs-policy-cadence
+  cancel-in-progress: false
+
+jobs:
+  cadence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Dump routing_outcomes (read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DAYS: ${{ github.event.inputs.lookback_days || '30' }}
+        run: |
+          mkdir -p artifacts work policies
+          # Normalise the Doppler SQLAlchemy DSN to a psql one (strip +asyncpg, fix ssl param).
+          PG_URL=$(printf '%s' "$DATABASE_URL" | sed -e 's/+asyncpg//' -e 's/?ssl.*$/?sslmode=require/')
+          psql "$PG_URL" -v days="$DAYS" -t -A \
+            -f scripts/dump_routing_outcomes.sql -o artifacts/routing_outcomes.json
+          python3 -c "import json;d=json.load(open('artifacts/routing_outcomes.json'));print(f'dumped {len(d)} rows')"
+
+      - name: Run cadence (DRY-RUN — candidate + gate only, never flips ACTIVE)
+        run: |
+          PYTHONPATH=. python3 scripts/training_cadence.py run \
+            --rows artifacts/routing_outcomes.json \
+            --workdir work \
+            --policies-dir policies \
+            --source prod \
+            | tee artifacts/cadence_summary.json
+          # Belt-and-suspenders: assert no ACTIVE.json was written in CI.
+          test ! -f policies/ACTIVE.json || (echo "::error::ACTIVE.json written in CI — must never happen" && exit 1)
+          cp -f policies/policy-*.json work/training_run.json artifacts/ 2>/dev/null || true
+
+      - name: Summarise
+        if: always()
+        run: |
+          echo "### LinUCB policy candidate (dry-run)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/cadence_summary.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no summary)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload candidate artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-candidate
+          path: artifacts/
+          retention-days: 14
