@@ -367,37 +367,80 @@ def test_q_empirical_none_is_identical_to_v0() -> None:
 
 
 def test_q_empirical_lifts_below_floor_model_and_wins() -> None:
-    """mistral q_prior=0.80 is below a 0.91 floor, but a learned mean of 0.95
-    clears it — and it is the cheapest survivor, so it now wins."""
+    """LEGACY floor-on-effective-q (default floor_on_q_prior=False — the offline replay-gate's
+    eval mode): mistral q_prior=0.80 is below a 0.91 floor, but a learned mean of 0.95 clears it
+    — and it is the cheapest survivor, so it wins. (Serving sets floor_on_q_prior=True; see
+    test_floor_on_q_prior_does_not_lift_below_floor_model for that path.)"""
     pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
-    # v0: mistral excluded, gpt-5-5 wins
     assert decide(_request(), _anchors(), pol).chosen.model_slug == "gpt-5-5"
-    # with empirical override: mistral clears floor and is cheapest ($8/Mt) → wins
+    d = decide(_request(), _anchors(), pol, q_empirical={"mistral-large-3": Decimal("0.95")})
+    assert d.chosen is not None and d.chosen.model_slug == "mistral-large-3"
+    assert d.rule_fired == "cheapest_clearing_floor"
+
+
+def test_q_empirical_drops_high_prior_model_below_floor() -> None:
+    """LEGACY floor-on-effective-q (default): opus q_prior=0.95 clears a 0.91 floor at v0, but a
+    learned mean of 0.50 pushes it below — dropped BELOW_QUALITY_FLOOR. This demotion is exactly
+    the signal the offline replay-gate relies on, so the default must keep it."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
+    d = decide(_request(), _anchors(), pol, q_empirical={"claude-opus-4-7": Decimal("0.50")})
+    opus = next(c for c in d.candidates if c.model_slug == "claude-opus-4-7")
+    assert opus.drop_reason is DropReason.BELOW_QUALITY_FLOOR
+    assert d.chosen is not None and d.chosen.model_slug == "gpt-5-5"
+
+
+def test_floor_on_q_prior_does_not_lift_below_floor_model() -> None:
+    """AIN-614 serving mode (floor_on_q_prior=True): the cost-aware q_empirical must NOT lift a
+    below-quality model over the floor. mistral q_prior=0.80 < 0.91 stays BELOW_QUALITY_FLOOR
+    even with q_empirical=0.95 — the floor reads q_prior, not q̂. gpt-5-5 still wins."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
     d = decide(
         _request(),
         _anchors(),
         pol,
         q_empirical={"mistral-large-3": Decimal("0.95")},
+        floor_on_q_prior=True,
     )
-    assert d.chosen is not None
-    assert d.chosen.model_slug == "mistral-large-3"
-    assert d.rule_fired == "cheapest_clearing_floor"
+    mistral = next(c for c in d.candidates if c.model_slug == "mistral-large-3")
+    assert mistral.drop_reason is DropReason.BELOW_QUALITY_FLOOR  # q_prior 0.80 < 0.91; not lifted
+    assert d.chosen is not None and d.chosen.model_slug == "gpt-5-5"
 
 
-def test_q_empirical_drops_high_prior_model_below_floor() -> None:
-    """opus q_prior=0.95 clears a 0.91 floor at v0, but a learned mean of 0.50
-    pushes it below — it is dropped with BELOW_QUALITY_FLOOR."""
+def test_floor_on_q_prior_does_not_drop_high_prior_model() -> None:
+    """AIN-614 serving-mode regression guard (the 2026-06-23 :quality 422): opus q_prior=0.95
+    clears a 0.91 floor; a LOW cost-aware q_empirical=0.50 must NOT push it below when
+    floor_on_q_prior=True — q_empirical affects only the rank. opus clears; gpt-5-5 stays
+    cheapest."""
     pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
     d = decide(
         _request(),
         _anchors(),
         pol,
         q_empirical={"claude-opus-4-7": Decimal("0.50")},
+        floor_on_q_prior=True,
     )
     opus = next(c for c in d.candidates if c.model_slug == "claude-opus-4-7")
-    assert opus.drop_reason is DropReason.BELOW_QUALITY_FLOOR
-    # winner is still the cheapest among the true survivors (gpt-5-5)
+    assert opus.drop_reason is None  # q_prior 0.95 ≥ 0.91 ⇒ clears; cost-aware q̂ does not drop it
     assert d.chosen is not None and d.chosen.model_slug == "gpt-5-5"
+
+
+def test_ain614_serving_qhat_below_floor_still_routes() -> None:
+    """AIN-614 — the exact incident shape: enrolled :quality models whose cost-aware q̂ is BELOW
+    the floor but q_prior ABOVE it. Legacy floor-on-q̂ drops them (the 422 cause);
+    floor_on_q_prior keeps them — q_prior gates, q̂ only ranks."""
+    pol = Policy(min_quality=Decimal("0.88"), policy_name="quality_first")  # reasoning floor
+    qhat = {"gpt-5-5": Decimal("0.49"), "claude-opus-4-7": Decimal("0.33")}  # cost-aware, < 0.88
+    # legacy floor-on-q̂ drops both high-q_prior models — the incident
+    legacy = decide(_request(), _anchors(), pol, q_empirical=qhat)
+    for slug in ("gpt-5-5", "claude-opus-4-7"):
+        c = next(x for x in legacy.candidates if x.model_slug == slug)
+        assert c.drop_reason is DropReason.BELOW_QUALITY_FLOOR  # low cost-aware q̂ < 0.88
+    # serving mode: q_prior 0.90/0.95 ≥ 0.88 → both clear → the cell routes
+    served = decide(_request(), _anchors(), pol, q_empirical=qhat, floor_on_q_prior=True)
+    assert served.chosen is not None and served.rule_fired == "cheapest_clearing_floor"
+    for slug in ("gpt-5-5", "claude-opus-4-7"):
+        c = next(x for x in served.candidates if x.model_slug == slug)
+        assert c.drop_reason is None
 
 
 def test_q_empirical_override_is_deterministic() -> None:

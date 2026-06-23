@@ -130,15 +130,21 @@ def _effective_q(
     candidate: Candidate,
     q_empirical: Mapping[str, Decimal] | None,
 ) -> Decimal | None:
-    """Quality used for the floor + q-tiebreak: the learned per-model mean
-    (``q_empirical``) when present, else the static ``q_prior``.
+    """Quality for the RANK q-tiebreak (always), and for the floor in LEGACY mode only
+    (``decide(..., floor_on_q_prior=False)``): the learned per-model mean (``q_empirical``)
+    when present, else the static ``q_prior``.
 
-    Per ontology v1.3 (``Q = q_prior ⊕ q_empirical``): once labeled outcomes
-    accrue, the empirical mean overrides the prior for SCORING. Enrolment is
-    unchanged — it still requires a real ``q_prior`` (F5: never fabricate a
-    prior), so the override only ever adjusts an already-enrolled candidate.
-    ``q_empirical=None`` (steady-state caller) returns ``q_prior`` unchanged,
-    so ``decide()`` stays byte-for-byte identical to v0.
+    AIN-614: the cost-aware ``q_empirical`` (B1 reward) answers "which acceptable model is
+    cheapest-good-enough", never "is this model acceptable". So the SERVING caller sets
+    ``floor_on_q_prior=True`` and the floor (step 2) reads ``candidate.q_prior`` directly,
+    leaving this mean to drive only the rank — conflating the two rejected expensive-but-good
+    models in :quality cells (the 2026-06-23 regression). The default keeps the v0
+    floor-on-effective-q, which the offline replay-gate uses as its demotion/flip signal.
+
+    Per ontology v1.3 (``Q = q_prior ⊕ q_empirical``): once labeled outcomes accrue, the
+    empirical mean overrides the prior for the SCORING/rank. Enrolment is unchanged — it still
+    requires a real ``q_prior`` (F5: never fabricate a prior). ``q_empirical=None``
+    (steady-state caller) returns ``q_prior`` unchanged, so the rank stays byte-for-byte v0.
     """
     if q_empirical is not None:
         override = q_empirical.get(candidate.model_slug)
@@ -181,13 +187,17 @@ def decide(
     *,
     q_empirical: Mapping[str, Decimal] | None = None,
     maker_penalty: Mapping[str, Decimal] | None = None,
+    floor_on_q_prior: bool = False,
 ) -> Decision:
     """Quality-floor-then-min-cost over an N-candidate set.
 
-    ``q_empirical`` (AIN-246): optional ``model_slug -> learned mean`` map. When
-    a candidate has an entry, that value replaces ``q_prior`` in the quality
-    floor and the q-tiebreak (the enrolment gates and the cheapest-survivor
-    pick are unchanged — Disc #12). Omitted/``None`` → identical to v0. The
+    ``q_empirical`` (AIN-246 / AIN-614): optional ``model_slug -> learned mean`` map. When a
+    candidate has an entry, that value drives the q-tiebreak in the cheapest-survivor RANK.
+    ``floor_on_q_prior`` (AIN-614, default False): when True the quality floor reads the static
+    ``q_prior`` so the cost-aware ``q_empirical`` can never make an acceptable model fail
+    acceptability — the SERVING mode (fixes the 2026-06-23 :quality 422 regression). Default
+    False keeps the v0 floor-on-effective-q the offline replay-gate depends on. Enrolment gates
+    and the cheapest-survivor pick are unchanged — Disc #12. Omitted/``None`` → identical to v0. The
     map is passed in by the caller (RNG-free, DB-free) so ``decide`` stays a
     pure, deterministic function; exploration (the ≥5% floor) is applied by
     the caller, not here.
@@ -287,10 +297,17 @@ def decide(
             )
             continue
 
-        # 2. Quality floor (AIN-246: empirical override when present, else prior).
-        # eq is non-None here — enrolment above guarantees c.q_prior is present.
-        eq = _effective_q(c, q_empirical)
-        if eq is not None and eq < policy.min_quality:
+        # 2. Quality floor. AIN-614: the SERVING caller sets floor_on_q_prior=True so the floor
+        # reads the STATIC quality prior. The cost-aware q_empirical (B1 reward = completion x
+        # (1 - norm_cost)) measures cheapest-good-enough, not acceptability; reading it here
+        # rejected expensive-but-good models in :quality cells (the 2026-06-23 regression -- every
+        # reasoning:quality candidate 422'd: q_hat ~0.3-0.5 < floor 0.88, though q_prior 0.90-0.95
+        # clears). With the prior floor, q_empirical drives ONLY the rank (step-4 tiebreak).
+        # Default (False) keeps the v0 effective-q floor: the offline LinUCB replay-gate
+        # (scripts/replay_gate.py) relies on a learned mean demoting a model below the floor as
+        # its candidate-flip signal, so its eval mode is unchanged. c.q_prior is present here.
+        floor_q = c.q_prior if floor_on_q_prior else _effective_q(c, q_empirical)
+        if floor_q is not None and floor_q < policy.min_quality:
             outcomes.append(
                 CandidateOutcome(
                     model_id=c.model_id,
