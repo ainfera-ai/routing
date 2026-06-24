@@ -223,17 +223,46 @@ def _is_synthetic_probe(row: dict[str, Any]) -> bool:
     return fa == "routed-probe" or fa.startswith("nt1-probe") or fa.endswith("-probe")
 
 
+# ── AIN-615 · judge-quality reward (the LEARNED quality signal for the FLOOR) ──────────────
+#
+# Distinct from the cost-aware `reward` column (B1 = 1{succeeded} * (1 - norm_cost)) that drives
+# RANK. The FLOOR needs a quality signal, not a cost-aware one — using cost-aware q̂ for the floor
+# caused the 2026-06-23 :quality 422 (AIN-614). The Opus-4.7 judge (AIN-290) scores a 1-5 Likert
+# in `judge_score`; normalize to [0,1]. A quality export replays into a SECOND LinUCB consumer →
+# quality_q̂ = b_q/A_q, parallel to the cost q̂. PROMOTION of quality_q̂ to the live floor is gated
+# on the κ-HOLD (judge-vs-Council trust) clearing — this only assembles the signal.
+def quality_reward(row: dict[str, Any]) -> float | None:
+    """Normalized judge quality reward in [0,1]: ``(judge_score - 1) / 4`` for the 1-5 Likert,
+    or ``None`` when the row is unlabeled or out of range (so a quality export keeps only
+    judge-labeled rows). AIN-615."""
+    raw = row.get("judge_score")
+    if raw is None:
+        return None
+    try:
+        s = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not 1.0 <= s <= 5.0:
+        return None
+    return (s - 1.0) / 4.0
+
+
 def project_rows(
     rows: list[dict[str, Any]],
     *,
     source: str = "prod",
     allow_mixed: bool = False,
+    quality: bool = False,
 ) -> list[dict[str, Any]]:
     """Raw routing_outcomes rows -> observation dicts (refit_policy shape).
 
     Keeps only labeled rows with a numeric reward and a chosen model.
     Filters to `source` unless `allow_mixed`. Deterministic tick ordering
     by created_at so a re-export of the same rows yields identical ticks.
+
+    ``quality`` (AIN-615): use the normalized judge-quality reward (``quality_reward``) instead
+    of the cost-aware ``reward`` column, keeping ONLY judge-labeled rows — the observation stream
+    for the parallel quality_q̂ consumer. All rider/exclusion filters are identical.
 
     Neutrality rider (AIN-391 §2a / AIN-388 P0-tail): internal-fleet rows
     (``tenant_id`` in the fleet-tenant set; ``fleet_agent`` fallback for
@@ -245,16 +274,18 @@ def project_rows(
     """
     fleet_w = fleet_downweight()
     seen_sources: set[str] = set()
-    kept: list[dict[str, Any]] = []
+    kept: list[tuple[dict[str, Any], float]] = []
     for r in rows:
         seen_sources.add(str(r.get("source") or "unknown"))
         if not allow_mixed and r.get("source") != source:
             continue
-        reward = r.get("reward")
+        reward = quality_reward(r) if quality else r.get("reward")
         model = r.get("chosen_model_slug")
         if reward is None or not model:
             continue
-        if r.get("judge_status") not in (None, "labeled"):
+        # Cost export honors the judge_status gate; a quality export uses the judge_score
+        # presence (quality_reward != None, above) AS the label gate.
+        if not quality and r.get("judge_status") not in (None, "labeled"):
             continue
         if _is_degraded(r):
             # Degraded/MLX fallback — excluded, not down-weighted. A
@@ -266,7 +297,7 @@ def project_rows(
             # (not down-weighted) — they are not real task outcomes. The
             # 0.25 dogfood down-weight is reserved for real internal work.
             continue
-        kept.append(r)
+        kept.append((r, float(reward)))
 
     if not allow_mixed and (seen_sources & {"synthetic"}) and (seen_sources - {source}):
         raise SystemExit(
@@ -274,9 +305,9 @@ def project_rows(
             f"(saw {sorted(seen_sources)}). Pass --allow-mixed for offline analysis only."
         )
 
-    kept.sort(key=lambda r: (str(r.get("created_at") or ""), str(r.get("cell") or "")))
+    kept.sort(key=lambda rk: (str(rk[0].get("created_at") or ""), str(rk[0].get("cell") or "")))
     out: list[dict[str, Any]] = []
-    for tick, r in enumerate(kept):
+    for tick, (r, reward) in enumerate(kept):
         is_fleet = is_fleet_row(r)
         out.append(
             {
@@ -287,7 +318,7 @@ def project_rows(
                     tenant_id=r.get("tenant_id"),
                 ),
                 "model_slug": r["chosen_model_slug"],
-                "reward": float(r["reward"]),
+                "reward": reward,
                 "policy_version": r.get("policy_version", "v0"),
                 "tick": tick,
                 # Provenance weight the LinUCB consumer honors at ingest.
@@ -324,6 +355,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--allow-mixed", action="store_true", help="offline analysis only; disables INVARIANT 1"
     )
+    p.add_argument(
+        "--quality",
+        action="store_true",
+        help="AIN-615: emit the judge-quality reward (normalized judge_score) for judge-labeled "
+        "rows only — the quality_q̂ observation stream (the dump must SELECT judge_score)",
+    )
     args = p.parse_args(argv)
 
     raw_text = Path(args.rows).read_text() if args.rows else sys.stdin.read()
@@ -331,7 +368,9 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(rows, list):
         raise SystemExit("expected a JSON list of row objects")
 
-    observations = project_rows(rows, source=args.source, allow_mixed=args.allow_mixed)
+    observations = project_rows(
+        rows, source=args.source, allow_mixed=args.allow_mixed, quality=args.quality
+    )
 
     payload = json.dumps(observations, indent=2) + "\n"
     if args.out:
