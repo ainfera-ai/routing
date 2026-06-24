@@ -518,3 +518,65 @@ def test_diversity_penalty_is_deterministic() -> None:
     pol = Policy(min_quality=Decimal("0.80"), policy_name="balanced")
     mp = {"mistral": Decimal("0.5"), "openai": Decimal("0.2")}
     assert decide(req, cands, pol, maker_penalty=mp) == decide(req, cands, pol, maker_penalty=mp)
+
+
+# ── AIN-615 · the FLOOR graduates from static q_prior to a learned quality q̂ ──────────────
+
+
+def test_quality_floor_demotes_a_model_q_prior_would_clear() -> None:
+    """floor_on_q_prior=True + quality_floor: a model whose LEARNED quality q̂ is below the floor
+    is dropped even though its static q_prior clears — the floor now reads the judge-learned
+    quality. gpt-5-5 (q_prior 0.93 ≥ 0.91) but quality_q̂=0.50 → BELOW_QUALITY_FLOOR; opus has no
+    learned q̂ yet → falls back to its q_prior 0.95 → clears → wins."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
+    d = decide(
+        _request(),
+        _anchors(),
+        pol,
+        floor_on_q_prior=True,
+        quality_floor={
+            "gpt-5-5": Decimal("0.50")
+        },  # learned quality < floor (q_prior 0.93 ≥ floor)
+    )
+    gpt = next(c for c in d.candidates if c.model_slug == "gpt-5-5")
+    assert gpt.drop_reason is DropReason.BELOW_QUALITY_FLOOR  # learned quality demotes it
+    assert d.chosen is not None and d.chosen.model_slug == "claude-opus-4-7"  # bridge-cleared
+
+
+def test_quality_floor_absent_model_falls_back_to_q_prior() -> None:
+    """A model with no quality_floor entry uses the static q_prior bridge (graceful per-model)."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
+    d = decide(
+        _request(),
+        _anchors(),
+        pol,
+        floor_on_q_prior=True,
+        quality_floor={"gpt-5-5": Decimal("0.99")},  # only gpt-5-5 has a learned q̂
+    )
+    # opus has no entry → q_prior 0.95 ≥ 0.91 → clears; gpt-5-5 q̂ 0.99 ≥ 0.91 → clears too.
+    for slug in ("gpt-5-5", "claude-opus-4-7"):
+        assert next(c for c in d.candidates if c.model_slug == slug).drop_reason is None
+
+
+def test_quality_floor_zero_is_a_valid_floor_not_a_fallback() -> None:
+    """A learned q̂ of exactly 0.0 (worst judge score) is a VALID floor → the model is dropped;
+    it must NOT be treated as falsy and fall back to a clearing q_prior."""
+    pol = Policy(min_quality=Decimal("0.50"), policy_name="quality_first")
+    d = decide(
+        _request(),
+        _anchors(),
+        pol,
+        floor_on_q_prior=True,
+        quality_floor={"claude-opus-4-7": Decimal("0")},  # 0.0, not None
+    )
+    opus = next(c for c in d.candidates if c.model_slug == "claude-opus-4-7")
+    assert opus.drop_reason is DropReason.BELOW_QUALITY_FLOOR  # 0.0 < 0.50, dropped (not bridged)
+
+
+def test_quality_floor_ignored_when_not_floor_on_q_prior() -> None:
+    """quality_floor only applies in serving mode (floor_on_q_prior). With it off, the floor is
+    the legacy effective-q — quality_floor is inert (the replay-gate path is untouched)."""
+    pol = Policy(min_quality=Decimal("0.91"), policy_name="quality_first")
+    base = decide(_request(), _anchors(), pol)  # legacy floor, no quality_floor
+    with_qf = decide(_request(), _anchors(), pol, quality_floor={"gpt-5-5": Decimal("0.0")})
+    assert base == with_qf  # byte-identical: quality_floor ignored without floor_on_q_prior

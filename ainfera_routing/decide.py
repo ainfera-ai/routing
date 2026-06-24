@@ -177,6 +177,34 @@ def _order_price(
     return candidate.total_price_per_mtok()
 
 
+# ── quality-floor source (AIN-614 bridge · AIN-615 learned graduation) ────
+
+
+def _floor_source(
+    candidate: Candidate,
+    *,
+    floor_on_q_prior: bool,
+    q_empirical: Mapping[str, Decimal] | None,
+    quality_floor: Mapping[str, Decimal] | None,
+) -> Decimal | None:
+    """The value the quality FLOOR (step 2) compares against ``policy.min_quality``.
+
+    * ``floor_on_q_prior=False`` (legacy / replay-gate eval): the effective-q (q_empirical ⊕
+      q_prior) — unchanged from v0.
+    * ``floor_on_q_prior=True`` (serving): the learned QUALITY q̂ ``quality_floor[slug]`` when the
+      caller supplies one for this model (AIN-615 — reliable sample support + κ-HOLD cleared); a
+      learned q̂ of ``0.0`` is a VALID floor, NOT a fallback. Absent → the static ``q_prior``
+      bridge (AIN-614). The cost-aware ``q_empirical`` never gates acceptability in serving mode.
+    """
+    if not floor_on_q_prior:
+        return _effective_q(candidate, q_empirical)
+    if quality_floor is not None:
+        learned = quality_floor.get(candidate.model_slug)
+        if learned is not None:
+            return learned
+    return candidate.q_prior
+
+
 # ── the decision ─────────────────────────────────────────────────────────
 
 
@@ -188,6 +216,7 @@ def decide(
     q_empirical: Mapping[str, Decimal] | None = None,
     maker_penalty: Mapping[str, Decimal] | None = None,
     floor_on_q_prior: bool = False,
+    quality_floor: Mapping[str, Decimal] | None = None,
 ) -> Decision:
     """Quality-floor-then-min-cost over an N-candidate set.
 
@@ -196,7 +225,14 @@ def decide(
     ``floor_on_q_prior`` (AIN-614, default False): when True the quality floor reads the static
     ``q_prior`` so the cost-aware ``q_empirical`` can never make an acceptable model fail
     acceptability — the SERVING mode (fixes the 2026-06-23 :quality 422 regression). Default
-    False keeps the v0 floor-on-effective-q the offline replay-gate depends on. Enrolment gates
+    False keeps the v0 floor-on-effective-q the offline replay-gate depends on.
+    ``quality_floor`` (AIN-615, default None): optional ``model_slug -> learned quality q̂`` map
+    (the judge-quality posterior). When ``floor_on_q_prior`` is set, the floor reads
+    ``quality_floor[slug]`` for any model present, else falls back to the static ``q_prior``
+    bridge — so the floor graduates per-model from the hand-set prior to a LEARNED quality
+    measure. The caller supplies it only for models with reliable sample support and only once
+    the κ-HOLD clears (judge-vs-Council trust). Ignored unless ``floor_on_q_prior``; the cost-aware
+    ``q_empirical`` still only ranks, never gates. Enrolment gates
     and the cheapest-survivor pick are unchanged — Disc #12. Omitted/``None`` → identical to v0. The
     map is passed in by the caller (RNG-free, DB-free) so ``decide`` stays a
     pure, deterministic function; exploration (the ≥5% floor) is applied by
@@ -306,7 +342,16 @@ def decide(
         # Default (False) keeps the v0 effective-q floor: the offline LinUCB replay-gate
         # (scripts/replay_gate.py) relies on a learned mean demoting a model below the floor as
         # its candidate-flip signal, so its eval mode is unchanged. c.q_prior is present here.
-        floor_q = c.q_prior if floor_on_q_prior else _effective_q(c, q_empirical)
+        #
+        # AIN-615: when a learned QUALITY signal exists for this model the floor reads it instead
+        # of the hand-set q_prior (per-model graduation from the bridge to a learned measure) —
+        # see _floor_source. The cost-aware q_empirical still never gates acceptability.
+        floor_q = _floor_source(
+            c,
+            floor_on_q_prior=floor_on_q_prior,
+            q_empirical=q_empirical,
+            quality_floor=quality_floor,
+        )
         if floor_q is not None and floor_q < policy.min_quality:
             outcomes.append(
                 CandidateOutcome(
