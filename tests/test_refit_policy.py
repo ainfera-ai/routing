@@ -74,3 +74,54 @@ def test_rollback_to_previous_flips_active(policies_dir, tmp_path):
     # audit log recorded the rollback
     hist = [json.loads(line) for line in (policies_dir / "HISTORY.jsonl").read_text().splitlines()]
     assert any(e["event"] == "rollback" and e["to"] == va and e["from"] == vb for e in hist)
+
+
+# ---- AIN-615 · parallel quality posterior (additive, inert) ----------------
+
+
+def test_refit_emits_quality_state_with_quality_observations(policies_dir, tmp_path):
+    """--quality-observations replays a SECOND consumer → additive quality_state, while the cost
+    state + version are unchanged (served-policy identity = the cost posterior)."""
+    cost_obs = _obs_file(tmp_path, _OBS_A)
+    q_path = tmp_path / "qobs.json"
+    q_path.write_text(
+        json.dumps(
+            [
+                {"cell": "code|t|balanced", "model_slug": "gpt-5-5", "reward": 1.0, "tick": 1},
+                {
+                    "cell": "code|t|balanced",
+                    "model_slug": "mistral-large-3",
+                    "reward": 0.25,
+                    "tick": 2,
+                },
+            ]
+        )
+    )
+    rc = refit_policy.main(
+        [
+            "refit",
+            "--observations",
+            cost_obs,
+            "--quality-observations",
+            str(q_path),
+            "--source",
+            "synthetic",
+        ]
+    )
+    assert rc == 0
+    v = json.loads((policies_dir / "ACTIVE.json").read_text())["version"]
+    art = json.loads((policies_dir / f"{v}.json").read_text())
+    assert "state" in art and "quality_state" in art  # both posteriors carried
+    assert art["n_quality_observations"] == 2
+    assert "quality_state_hash8" in art and art["quality_state_hash8"] != art["state_hash8"]
+
+
+def test_refit_omits_quality_state_by_default(policies_dir, tmp_path):
+    """No --quality-observations → no quality_* keys (backward-compatible artifact)."""
+    refit_policy.main(
+        ["refit", "--observations", _obs_file(tmp_path, _OBS_A), "--source", "synthetic"]
+    )
+    v = json.loads((policies_dir / "ACTIVE.json").read_text())["version"]
+    art = json.loads((policies_dir / f"{v}.json").read_text())
+    assert "quality_state" not in art
+    assert "n_quality_observations" not in art

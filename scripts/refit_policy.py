@@ -116,6 +116,24 @@ def cmd_refit(args: argparse.Namespace) -> int:
         "state_hash8": hash8,
         "created_at": ts,
     }
+    # AIN-615: optional parallel QUALITY posterior. Replays the judge-quality observation stream
+    # (export_outcomes.py --quality) into a second consumer → quality_q̂ = b_q/A_q, carried
+    # ADDITIVELY in the artifact. The serving consumer ignores quality_state until decide() is
+    # wired to read it (promotion gated on the κ-HOLD). The version/hash stays the COST state's —
+    # the served policy identity is unchanged; quality_state_hash8 is separate provenance.
+    if args.quality_observations:
+        q_obs = _load_observations(Path(args.quality_observations))
+        q_consumer = replay(
+            q_obs,
+            alpha=Decimal(str(args.alpha)),
+            exploration_floor=Decimal(str(args.exploration_floor)),
+            decay_half_life=args.decay_half_life,
+        )
+        artifact["quality_state"] = q_consumer.serialize()
+        artifact["quality_state_hash8"] = hashlib.sha256(q_consumer.to_json().encode()).hexdigest()[
+            :8
+        ]
+        artifact["n_quality_observations"] = len(q_obs)
     POLICIES_DIR.mkdir(exist_ok=True)
     (POLICIES_DIR / f"{version}.json").write_text(json.dumps(artifact, indent=2) + "\n")
     prev = None if args.no_flip_active else _set_active(version)
@@ -182,6 +200,13 @@ def main(argv: list[str] | None = None) -> int:
 
     r = sub.add_parser("refit", help="refit a versioned policy from observations")
     r.add_argument("--observations", required=True)
+    r.add_argument(
+        "--quality-observations",
+        default=None,
+        help="AIN-615: judge-quality observation stream (export_outcomes.py --quality) → a "
+        "parallel quality_q̂ posterior carried additively in the artifact (inert until decide() "
+        "reads it; promotion gated on the κ-HOLD)",
+    )
     r.add_argument("--source", default="prod")
     r.add_argument("--alpha", default="1.0")
     r.add_argument("--exploration-floor", default="0.05")
