@@ -15,6 +15,7 @@ from scripts.export_outcomes import (
     bandit_cell,
     fleet_downweight,
     project_rows,
+    quality_reward,
 )
 
 
@@ -351,3 +352,42 @@ def test_routing_fleet_tenant_keystone_matches_api_constant():
     api write path tags on (api services/routing_brain._FLEET_TENANT_IDS_DEFAULT
     + its own test). A drift in either repo would split fleet detection."""
     assert _FLEET_TENANT_IDS_DEFAULT == "280f4469-d318-4ec4-9c63-f3ea83466b03"
+
+
+# ---- AIN-615 · judge-quality reward + quality export -----------------------
+
+
+def test_quality_reward_normalizes_1to5_likert():
+    # (judge_score - 1)/4 maps the 1-5 Likert to [0,1].
+    assert quality_reward({"judge_score": 1}) == 0.0
+    assert quality_reward({"judge_score": 3}) == 0.5
+    assert quality_reward({"judge_score": 5}) == 1.0
+    assert quality_reward({"judge_score": "4"}) == 0.75  # string-coerced
+
+
+def test_quality_reward_none_when_unlabeled_or_out_of_range():
+    assert quality_reward({"judge_score": None}) is None  # unlabeled
+    assert quality_reward({}) is None  # absent
+    assert quality_reward({"judge_score": 0}) is None  # out of range
+    assert quality_reward({"judge_score": 6}) is None
+    assert quality_reward({"judge_score": "n/a"}) is None  # non-numeric
+
+
+def test_project_rows_quality_uses_judge_reward_and_keeps_only_labeled():
+    rows = [
+        _row(chosen_model_slug="mistral-large-3", judge_score=5),  # → reward 1.0
+        _row(chosen_model_slug="gpt-5-5", judge_score=1),  # → reward 0.0
+        _row(chosen_model_slug="grok-4", judge_score=None),  # dropped: unlabeled
+    ]
+    obs = project_rows(rows, quality=True)
+    by_model = {o["model_slug"]: o["reward"] for o in obs}
+    assert by_model == {"mistral-large-3": 1.0, "gpt-5-5": 0.0}  # grok dropped
+    # the cost-aware `reward` column is NOT used in quality mode
+    assert all(o["reward"] in (0.0, 1.0) for o in obs)
+
+
+def test_project_rows_cost_mode_unchanged_by_quality_param():
+    # default (quality=False) still uses the cost-aware `reward` column.
+    rows = [_row(reward=0.42, judge_score=5)]
+    obs = project_rows(rows)
+    assert obs[0]["reward"] == 0.42  # cost reward, not the judge-derived 1.0
