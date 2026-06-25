@@ -29,6 +29,7 @@ def _row(**kw):
         "created_at": "2026-06-01T00:00:00+00:00",
         "judge_status": "labeled",
         "source": "prod",
+        "reward_source": "verify",  # AIN-621: authority provenance (cost-export allowlist)
     }
     base.update(kw)
     return base
@@ -391,3 +392,41 @@ def test_project_rows_cost_mode_unchanged_by_quality_param():
     rows = [_row(reward=0.42, judge_score=5)]
     obs = project_rows(rows)
     assert obs[0]["reward"] == 0.42  # cost reward, not the judge-derived 1.0
+
+
+# ---- AIN-621 · authority allowlist on the COST/reward export ----------------
+
+
+def test_cost_export_allowlists_authority_only():
+    # Only verifiable + Council provenance feeds the cost corpus; a 'judge' screening
+    # opinion or a NULL-provenance reward is dropped.
+    rows = [
+        _row(chosen_model_slug="verify_row", reward_source="verify"),  # kept
+        _row(chosen_model_slug="council_row", reward_source="council"),  # kept
+        _row(chosen_model_slug="judge_row", reward_source="judge"),  # dropped: screening
+        _row(chosen_model_slug="null_row", reward_source=None),  # dropped: no provenance
+    ]
+    obs = project_rows(rows)
+    assert {o["model_slug"] for o in obs} == {"verify_row", "council_row"}
+
+
+def test_cost_export_fails_loud_when_dump_lacks_reward_source():
+    # A pre-contract dump (rows carry reward but NO reward_source key at all) must raise
+    # INVARIANT 2 — never silently emit an empty corpus.
+    rows = [{**_row(chosen_model_slug="x"), "reward_source": None}]
+    # remove the key entirely to simulate a dump that never SELECTed it
+    for r in rows:
+        r.pop("reward_source", None)
+    with pytest.raises(SystemExit, match="INVARIANT 2"):
+        project_rows(rows)
+
+
+def test_quality_export_is_not_authority_allowlisted():
+    # The quality_q̂ stream is judge-based BY DESIGN (κ-gated separately): the authority
+    # allowlist must NOT apply, so judge-labeled rows are kept regardless of reward_source.
+    rows = [
+        _row(chosen_model_slug="a", reward_source="judge", judge_score=5),
+        _row(chosen_model_slug="b", reward_source=None, judge_score=3),
+    ]
+    obs = project_rows(rows, quality=True)
+    assert {o["model_slug"] for o in obs} == {"a", "b"}

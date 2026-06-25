@@ -26,6 +26,7 @@ def _sample_rows(n: int = 15) -> list[dict]:
                 "task_type": "chat",
                 "chosen_model_slug": "mistral-large-3",
                 "reward": 0.85,
+                "reward_source": "verify",  # AIN-621: authority provenance (cost-export allowlist)
                 "policy_version": "v0",
                 "created_at": f"2026-06-0{(i % 9) + 1}T12:00:00Z",
                 "judge_status": "labeled",
