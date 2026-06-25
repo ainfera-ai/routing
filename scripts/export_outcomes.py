@@ -260,9 +260,17 @@ def project_rows(
     Filters to `source` unless `allow_mixed`. Deterministic tick ordering
     by created_at so a re-export of the same rows yields identical ticks.
 
+    AIN-621 authority ALLOWLIST (cost mode): the cost-aware ``reward`` corpus trains ONLY on
+    ``reward_source IN ('council','verify')`` — a 'judge' screening opinion (Gemma/Super) or a
+    NULL-provenance reward is excluded by construction. CONTRACT: the dump
+    (``scripts/dump_routing_outcomes.sql``) MUST SELECT ``reward_source``; a cost dump without it
+    raises INVARIANT 2 (fail-loud, never a silent empty corpus).
+
     ``quality`` (AIN-615): use the normalized judge-quality reward (``quality_reward``) instead
     of the cost-aware ``reward`` column, keeping ONLY judge-labeled rows — the observation stream
-    for the parallel quality_q̂ consumer. All rider/exclusion filters are identical.
+    for the parallel quality_q̂ consumer. That stream is judge-based BY DESIGN (κ-gated
+    separately), so the authority allowlist above does NOT apply to it. Other rider/exclusion
+    filters are identical.
 
     Neutrality rider (AIN-391 §2a / AIN-388 P0-tail): internal-fleet rows
     (``tenant_id`` in the fleet-tenant set; ``fleet_agent`` fallback for
@@ -274,6 +282,8 @@ def project_rows(
     """
     fleet_w = fleet_downweight()
     seen_sources: set[str] = set()
+    saw_reward_source = False  # AIN-621: did the cost dump carry reward_source provenance?
+    n_cost_reward_bearing = 0  # cost-mode rows with a usable reward (pre-allowlist)
     kept: list[tuple[dict[str, Any], float]] = []
     for r in rows:
         seen_sources.add(str(r.get("source") or "unknown"))
@@ -287,6 +297,20 @@ def project_rows(
         # presence (quality_reward != None, above) AS the label gate.
         if not quality and r.get("judge_status") not in (None, "labeled"):
             continue
+        # AIN-621 · authority ALLOWLIST for the COST/reward export (refit_policy): the
+        # cost-aware reward-of-record trains ONLY on verifiable + Council provenance. A
+        # 'judge' screening opinion (Gemma/Super) or a NULL-provenance reward is excluded
+        # by construction (an allowlist, not a NOT IN ('judge') denylist that would still
+        # admit the null rows). The quality_q̂ stream (quality=True, AIN-615) is the
+        # judge-quality learner BY DESIGN and is governed by the κ gate separately — it is
+        # NOT allowlisted here.
+        if not quality:
+            n_cost_reward_bearing += 1
+            reward_source = r.get("reward_source")
+            if reward_source is not None:
+                saw_reward_source = True
+            if reward_source not in ("council", "verify"):
+                continue
         if _is_degraded(r):
             # Degraded/MLX fallback — excluded, not down-weighted. A
             # degraded backend's reward is not a clean signal of the
@@ -303,6 +327,16 @@ def project_rows(
         raise SystemExit(
             f"INVARIANT 1: mixed sources in a --source={source} export "
             f"(saw {sorted(seen_sources)}). Pass --allow-mixed for offline analysis only."
+        )
+
+    # AIN-621 INVARIANT 2: a cost export whose dump carries reward-bearing rows but NO
+    # reward_source provenance predates the authority-allowlist contract — fail LOUD rather
+    # than silently emit an empty (un-provenanced) corpus and quietly stall the refit.
+    if not quality and n_cost_reward_bearing and not saw_reward_source:
+        raise SystemExit(
+            "INVARIANT 2 (AIN-621): cost-export dump carries no reward_source — the authority "
+            "allowlist (reward_source IN ('council','verify')) would drop every row. Re-dump "
+            "with scripts/dump_routing_outcomes.sql (it now SELECTs reward_source)."
         )
 
     kept.sort(key=lambda rk: (str(rk[0].get("created_at") or ""), str(rk[0].get("cell") or "")))
