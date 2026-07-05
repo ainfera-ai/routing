@@ -1,0 +1,35 @@
+# Code Owners for the ainfera-ai organization
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all repos
+* @hizrianraz
+
+# Python repositories
+/ainfera-crewai/* @hizrianraz
+/ainfera-google-adk/* @hizrianraz
+/ainfera-langchain/* @hizrianraz
+/ainfera-langgraph/* @hizrianraz
+/ainfera-microsoft-agent-framework/* @hizrianraz
+/ainfera-pydantic/* @hizrianraz
+/api/* @hizrianraz
+/council/* @hizrianraz
+/labs/* @hizrianraz
+/mcp-server/* @hizrianraz
+/research/* @hizrianraz
+/routing/* @hizrianraz
+/sdk/* @hizrianraz
+/specs/* @hizrianraz
+/valinor/* @hizrianraz
+/verify/* @hizrianraz
+
+/mcp-vault-worker/* @hizrianraz
+/valinor-gateway/* @hizrianraz
+/vault/* @hizrianraz
+/web/* @hizrianraz
+
+/ainfera-hermes/* @hizrianraz
+/ainfera-letta/* @hizrianraz
+/ainfera-llamaindex/* @hizrianraz
+/ainfera-mcp/* @hizrianraz
+/ainfera-openai-compatible/* @hizrianraz
+/ainfera-openclaw/* @hizrianraz
