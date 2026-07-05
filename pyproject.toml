@@ -1,44 +1,49 @@
-[project]
-name = "ainfera-routing"
-version = "0.1.0"
-description = "Ainfera Routing — importable decision core (the brain)."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
-authors = [{ name = "Ainfera Inc." }]
-dependencies = []
+# routing
 
-[dependency-groups]
-dev = [
-    "pytest>=8.3.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
-]
+Agent-native inference routing by Ainfera. Policy templates + methodology for production agent workl
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["ainfera_routing"]
+[project]
+name = "routing"
+version = "0.1.0"
+description = "Agent-native inference routing by Ainfera. Policy templates + methodology for production agent workl"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "Ainfera Inc"}]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4.0",
+]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["routing*"]
 
 [tool.ruff]
+target-version = "py310"
 line-length = 100
-target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RET", "ARG", "PTH", "ERA", "PL", "RUF"]
-ignore = ["PLR0913", "PLR2004"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
+select = ["E", "F", "W", "I", "N", "B", "A", "C4", "SIM", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-addopts = "-ra --strict-markers"
+addopts = "-v --tb=short"
