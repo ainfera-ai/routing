@@ -2,7 +2,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-**The Inference of AI Agents.** Agent-native inference routing — constrained optimization across 50+ models, not a billing gateway.
+**The Inference of AI Agents.** Agent-native inference routing — constrained optimization across the live model catalog (currently 245 models, sourced from /v1/models), not a billing gateway.
 
 Ainfera Routing is the control plane for production agent workloads: pick the highest-quality model that satisfies hard budget and latency limits, dispatch, capture outcomes, and compound routing intelligence from real traffic.
 
