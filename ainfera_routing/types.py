@@ -50,9 +50,10 @@ class Candidate:
     # tokens / tps). None = unknown → never dropped for latency (conservative).
     # Acted on only when the preset carries a latency_cap_ms.
     expected_latency_ms: int | None = None
-    # F4 / AIN-660: eval-v2 ruler agentic reliability score (0.0–1.0) from the
-    # tool-use task suite. None = not yet scored → never dropped (conservative).
-    # Acted on only when the preset carries an agentic_floor.
+    # AIN-542 F4: agentic reliability index (0.0–1.0) from eval-v2 ruler G1
+    # score. Measures tool-call validity rate. None = not yet scored → never
+    # dropped for agentic unreliability (conservative). Acted on only when the
+    # preset carries an agentic_floor.
     aa_agentic_index: float | None = None
 
     def total_price_per_mtok(self) -> Decimal:
