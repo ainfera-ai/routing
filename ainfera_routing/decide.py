@@ -409,6 +409,31 @@ def decide(
             )
             continue
 
+        # 3c. Agentic reliability floor (F4 / AIN-660; default OFF). When the
+        # preset carries an agentic_floor AND this candidate has a known
+        # aa_agentic_index, drop survivors below the floor — so a cheap-but-
+        # tool-broken model can't win tool-use tasks. agentic_floor None →
+        # inert; unknown score → kept (conservative).
+        if (
+            policy.agentic_floor is not None
+            and c.aa_agentic_index is not None
+            and c.aa_agentic_index < policy.agentic_floor
+        ):
+            outcomes.append(
+                CandidateOutcome(
+                    model_id=c.model_id,
+                    model_slug=c.model_slug,
+                    brand_slug=c.brand_slug,
+                    q_prior=c.q_prior,
+                    price_in_per_mtok_usd=c.price_in_per_mtok_usd,
+                    price_out_per_mtok_usd=c.price_out_per_mtok_usd,
+                    m_allowed=c.m_allowed,
+                    projected_cost_usd=projected,
+                    drop_reason=DropReason.BELOW_AGENTIC_FLOOR,
+                )
+            )
+            continue
+
         survivors.append(c)
 
     if not survivors:
@@ -423,6 +448,7 @@ def decide(
                 DropReason.BELOW_QUALITY_FLOOR,
                 DropReason.EXCEEDS_BUDGET_CAP,
                 DropReason.EXCEEDS_LATENCY_CAP,
+                DropReason.BELOW_AGENTIC_FLOOR,
             )
             for o in outcomes
         )

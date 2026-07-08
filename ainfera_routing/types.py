@@ -25,6 +25,7 @@ class DropReason(StrEnum):
     BELOW_QUALITY_FLOOR = "below_quality_floor"
     EXCEEDS_BUDGET_CAP = "exceeds_budget_cap"
     EXCEEDS_LATENCY_CAP = "exceeds_latency_cap"
+    BELOW_AGENTIC_FLOOR = "below_agentic_floor"
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,10 @@ class Candidate:
     # tokens / tps). None = unknown → never dropped for latency (conservative).
     # Acted on only when the preset carries a latency_cap_ms.
     expected_latency_ms: int | None = None
+    # F4 / AIN-660: eval-v2 ruler agentic reliability score (0.0–1.0) from the
+    # tool-use task suite. None = not yet scored → never dropped (conservative).
+    # Acted on only when the preset carries an agentic_floor.
+    aa_agentic_index: float | None = None
 
     def total_price_per_mtok(self) -> Decimal:
         """Combined in+out price as the cheapness ordering key.
@@ -77,6 +82,11 @@ class Policy:
     # win on price alone (D6: a 41 s model on a latency-sensitive preset).
     # None = no SLO = inert = byte-identical to v0.
     latency_cap_ms: int | None = None
+    # F4 / AIN-660: per-preset agentic reliability floor (0.0–1.0). When set,
+    # the brain drops survivors whose Candidate.aa_agentic_index is below the
+    # floor — so a cheap-but-tool-broken model can't win tool-use tasks.
+    # None = no floor = inert.
+    agentic_floor: float | None = None
     policy_name: str = "default"
 
 
