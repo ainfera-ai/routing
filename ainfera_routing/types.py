@@ -55,6 +55,10 @@ class Candidate:
     # dropped for agentic unreliability (conservative). Acted on only when the
     # preset carries an agentic_floor.
     aa_agentic_index: float | None = None
+    # Routing SKU architecture (2026-07-08): the AA Intelligence Index score
+    # from the catalog. Used by the `frontier` pool filter (aa_intelligence_index
+    # >= _FRONTIER_AA_MIN). None = not yet scored → excluded from frontier pool.
+    aa_intelligence_index: int | None = None
 
     def total_price_per_mtok(self) -> Decimal:
         """Combined in+out price as the cheapness ordering key.
