@@ -2,7 +2,11 @@
 
 Agent-native inference routing by Ainfera. Policy templates + methodology for production agent workl
 
+<<<<<<< Updated upstream
 ## Details
+=======
+**The Inference of AI Agents.** Agent-native inference routing — constrained optimization across 57 models, not a billing gateway.
+>>>>>>> Stashed changes
 
 | | |
 |---|---|
