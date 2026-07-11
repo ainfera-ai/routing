@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/ainfera-ai/.github/discussions
+    about: Questions, ideas, community
+  - name: Security
+    url: https://github.com/ainfera-ai/.github/security/policy
+    about: Report security vulnerabilities privately
