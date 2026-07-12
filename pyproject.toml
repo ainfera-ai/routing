@@ -1,6 +1,5 @@
 # routing
-
-Agent-native inference routing by Ainfera. Policy templates + methodology for production agent workl
+# Agent-native inference routing by Ainfera. Policy templates + methodology for production agent workl
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]

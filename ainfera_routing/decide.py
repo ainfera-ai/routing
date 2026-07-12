@@ -75,13 +75,34 @@ _LATENCY_RULE = {
     }
 }
 
+# AIN-675 expected-cost ranking (default OFF). When the caller sets
+# expected_cost_ranking=True, the survivor ORDERING (step 4) ranks on
+# expected cost per success (price / q_effective) instead of raw price —
+# so a slightly more expensive model with much higher quality can win.
+# Gates / floor / budget are unchanged. Folded into the ruleset payload
+# ONLY when active, so audit rows are distinguishable and replay stays
+# exact — with the flag OFF the hash is byte-identical to v0.
+_EXPECTED_COST_RULE = {
+    "selection": {
+        "mechanism": "expected_cost_per_success",
+        "applies_to": "ordering_only",
+    }
+}
 
-def _ruleset_hash(*, diversity_active: bool, latency_active: bool = False) -> str:
+
+def _ruleset_hash(
+    *,
+    diversity_active: bool,
+    latency_active: bool = False,
+    expected_cost_active: bool = False,
+) -> str:
     payload: dict[str, object] = dict(_RULESET_PAYLOAD)
     if diversity_active:
         payload.update(_DIVERSITY_RULE)
     if latency_active:
         payload.update(_LATENCY_RULE)
+    if expected_cost_active:
+        payload.update(_EXPECTED_COST_RULE)
     blob = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()[:8]
 
@@ -95,7 +116,9 @@ def ruleset_hash() -> str:
     diversity soft-penalty is active for a given decision, `decide` stamps the
     extended (diversity) shape instead; see `_ruleset_hash`.
     """
-    return _ruleset_hash(diversity_active=False, latency_active=False)
+    return _ruleset_hash(
+        diversity_active=False, latency_active=False, expected_cost_active=False
+    )
 
 
 # ── cost projection ──────────────────────────────────────────────────────
@@ -205,6 +228,31 @@ def _floor_source(
     return candidate.q_prior
 
 
+# ── expected cost per success (AIN-675 · ordering only) ──────────────────
+
+
+def _expected_cost_key(
+    candidate: Candidate,
+    q_empirical: Mapping[str, Decimal] | None,
+    maker_penalty: Mapping[str, Decimal] | None,
+) -> Decimal:
+    """Sort key for AIN-675: expected cost per success = effective_price / q_effective.
+
+    Lower is better. Uses the same effective_q logic as the rank (q_empirical
+    when present, else q_prior). The effective_price includes the diversity
+    maker_penalty so the two mechanisms compose. q is floored to a small ε to
+    avoid division by zero — but every survivor has already cleared the quality
+    floor (step 2), so q is always > 0 in practice.
+    """
+    q = _effective_q(candidate, q_empirical)
+    if q is None or q <= 0:
+        # Should never reach here (floor gate ensures q_prior is present and
+        # >= min_quality > 0), but defense in depth: push to back.
+        return Decimal("Infinity")
+    price = _order_price(candidate, maker_penalty)
+    return price / q
+
+
 # ── the decision ─────────────────────────────────────────────────────────
 
 
@@ -217,6 +265,7 @@ def decide(
     maker_penalty: Mapping[str, Decimal] | None = None,
     floor_on_q_prior: bool = False,
     quality_floor: Mapping[str, Decimal] | None = None,
+    expected_cost_ranking: bool = False,
 ) -> Decision:
     """Quality-floor-then-min-cost over an N-candidate set.
 
@@ -247,11 +296,24 @@ def decide(
     relaxes a budget. ``None`` / empty / all-zero → byte-identical to v0
     (same winner AND same ``ruleset_hash``); the hash only bumps to the
     diversity shape when a positive penalty is actually in force.
+
+    ``expected_cost_ranking`` (AIN-675, default False): when True, the survivor
+    ORDERING ranks on expected cost per success (``effective_price / q_effective``)
+    instead of raw price. This lets a slightly more expensive model with higher
+    quality win over a cheaper model with lower quality — the selection objective
+    becomes "cheapest per unit of success" rather than "cheapest, quality is just
+    a tiebreak". Gates / floor / budget are unchanged. ``False`` → byte-identical
+    to v0. The ruleset hash bumps to the expected-cost shape only when this flag
+    is True.
     """
 
     diversity_active = maker_penalty is not None and any(v > 0 for v in maker_penalty.values())
     latency_active = policy.latency_cap_ms is not None
-    h = _ruleset_hash(diversity_active=diversity_active, latency_active=latency_active)
+    h = _ruleset_hash(
+        diversity_active=diversity_active,
+        latency_active=latency_active,
+        expected_cost_active=expected_cost_ranking,
+    )
 
     if not candidates:
         return Decision(
@@ -472,14 +534,32 @@ def decide(
     # rare to impossible once empirical priors land in v1).
     # `effective_price` = real combined price * (1 + maker diversity penalty);
     # with no penalty it IS the real combined price → v0 ordering unchanged.
-    ranked = sorted(
-        survivors,
-        key=lambda c: (
-            _order_price(c, maker_penalty),
-            -(_effective_q(c, q_empirical) or Decimal("0")),
-            c.model_slug,
-        ),
-    )
+    #
+    # AIN-675: when expected_cost_ranking=True, the primary sort key becomes
+    # expected cost per success (effective_price / q_effective) instead of
+    # raw effective_price. This makes the selection objective "cheapest per
+    # unit of success" rather than "cheapest, quality is just a tiebreak".
+    # The q_empirical / quality_floor overrides already passed in are used
+    # for the q value, so the learned signal (when available and gated to
+    # fleet traffic) feeds the ranking. The q_prior floor (step 2) already
+    # ensured every survivor is acceptable — this only reorders them.
+    if expected_cost_ranking:
+        ranked = sorted(
+            survivors,
+            key=lambda c: (
+                _expected_cost_key(c, q_empirical, maker_penalty),
+                c.model_slug,
+            ),
+        )
+    else:
+        ranked = sorted(
+            survivors,
+            key=lambda c: (
+                _order_price(c, maker_penalty),
+                -(_effective_q(c, q_empirical) or Decimal("0")),
+                c.model_slug,
+            ),
+        )
 
     # Detect whether a veto influenced the winner — used to label rule_fired
     # so NT2's "a compliance-failed candidate that would otherwise win is
